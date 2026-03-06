@@ -1,4 +1,4 @@
-.PHONY: backup restore
+.PHONY: backup restore deploy
 
 backup:
 	bash scripts/backup.sh
@@ -9,3 +9,6 @@ restore:
 		exit 1; \
 	fi
 	bash scripts/restore.sh "$(FILE)"
+
+deploy:
+	bash scripts/deploy.sh "$(BRANCH)"

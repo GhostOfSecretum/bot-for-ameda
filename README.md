@@ -212,6 +212,61 @@ docker run --rm -v ameda_data:/to -v "$(pwd)/data:/from:ro" alpine:3.20 sh -c "c
 
 После этого можно запускать новую конфигурацию `docker compose up -d --build`.
 
+### 5.9 Как обновлять проект на сервере
+
+Ниже инструкция для человека, которому вы передаете поддержку проекта.
+
+1) Подключиться к серверу и перейти в папку проекта:
+```bash
+ssh user@server
+cd /opt/ameda-bot
+```
+
+2) Обновить код из Git:
+```bash
+git checkout main
+git pull --ff-only
+```
+
+3) Обновить контейнеры (рекомендуемый вариант для текущей конфигурации):
+```bash
+docker compose up -d --build --remove-orphans
+```
+
+То же самое одной командой:
+```bash
+make deploy
+```
+
+Если нужно обновиться не с `main`, а с другой ветки:
+```bash
+make deploy BRANCH=release
+```
+
+Проверка после обновления:
+```bash
+docker compose ps
+docker compose logs -f --tail=100 bot
+```
+
+Важно:
+- `git pull` обновляет исходный код и конфиги из репозитория.
+- В этом проекте `bot` и `dashboard` собираются локально (`build: .`), поэтому основной способ обновления — `docker compose up -d --build`.
+- `docker compose pull` / `docker pull` нужен, когда сервисы работают на готовых образах из registry (`image: ...`) или чтобы обновить базовые образы.
+
+Если проект переведен на образы из registry (пример сценария):
+```bash
+git checkout main
+git pull --ff-only
+docker compose pull
+docker compose up -d --remove-orphans
+```
+
+Рекомендации:
+- Не храните секреты в Git: `.env` должен оставаться только на сервере.
+- Для production лучше использовать versioned tags образов (`v1.2.3`), а не только `latest`.
+- Для удобства и одинакового процесса у всех админов используйте `scripts/deploy.sh` (через `make deploy`).
+
 ## 6) Security/Secrets
 
 Чтобы безопасно хранить проект в GitHub:
