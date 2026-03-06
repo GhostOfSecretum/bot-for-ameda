@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from app.constants import ALLOWED_ROLES, DEFAULT_EQUIPMENT, HIDDEN_EQUIPMENT_TYPES
+from app.time_utils import now_iso
 
 
 class Database:
@@ -165,7 +165,7 @@ class Database:
 
     @staticmethod
     def _now() -> str:
-        return datetime.utcnow().isoformat(timespec="seconds")
+        return now_iso(timespec="seconds")
 
     def upsert_user(
         self,

@@ -4,7 +4,6 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
 from html import escape
 from pathlib import Path
 from typing import Any
@@ -52,6 +51,7 @@ from app.keyboards import (
     yes_no_keyboard,
 )
 from app.storage import PhotoStorage
+from app.time_utils import now_compact_timestamp, now_iso
 
 try:
     from app.sheets_reporting import GoogleSheetsReporter
@@ -921,7 +921,7 @@ class InspectionBot:
                 draft.waiting_for_daily_end_workday_fuel_photo
                 and draft.daily_action_key == "end_workday"
             ):
-                timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
+                timestamp = now_compact_timestamp()
                 fuel_photo_path = await self.storage.save_daily_action_photo(
                     bot=self.bot,
                     telegram_file_id=best_photo.file_id,
@@ -936,7 +936,7 @@ class InspectionBot:
                 draft.waiting_for_daily_end_workday_photos
                 and draft.daily_action_key == "end_workday"
             ):
-                timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
+                timestamp = now_compact_timestamp()
                 missing_daily_photos = self._missing_daily_end_workday_photos(draft)
                 if not missing_daily_photos:
                     await message.answer(t(lang, "daily_end_workday_photo_done"))
@@ -993,7 +993,7 @@ class InspectionBot:
                 await message.answer(t(lang, "inspection_start_first"))
                 return
 
-            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
+            timestamp = now_compact_timestamp()
 
             if draft.waiting_for_issue_photo:
                 filename = f"issue_{draft.checklist_index}_{timestamp}.jpg"
@@ -1832,7 +1832,7 @@ class InspectionBot:
                     telegram_file_id=photo_file_id,
                     driver_tg_id=draft.driver_tg_id,
                     filename=(
-                        f"{action_key}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}.jpg"
+                        f"{action_key}_{now_compact_timestamp()}.jpg"
                     ),
                 )
             except Exception:
@@ -1910,7 +1910,7 @@ class InspectionBot:
                 f"{escape(t(report_lang, 'daily_report_comment'))}: {escape(draft.daily_action_comment)}"
             )
         report_lines.append(
-            f"{escape(t(report_lang, 'daily_report_time'))}: {datetime.utcnow().isoformat(timespec='seconds')}"
+            f"{escape(t(report_lang, 'daily_report_time'))}: {now_iso(timespec='seconds')}"
         )
         if action_key == "refuel" and draft.daily_action_status_key == "required":
             report_lines.append("")

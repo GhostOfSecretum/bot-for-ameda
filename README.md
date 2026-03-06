@@ -183,7 +183,7 @@ docker compose down
 Важно: `.env` в бэкап не входит, храните его отдельно в защищенном месте.
 
 Опциональные настройки в `.env`:
-- `TZ=UTC`
+- `TZ=Europe/Moscow`
 - `BACKUP_HOUR=3`
 - `BACKUP_MINUTE=10`
 - `BACKUP_KEEP_LAST=14`

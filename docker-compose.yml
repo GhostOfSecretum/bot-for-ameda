@@ -30,7 +30,7 @@ services:
     container_name: ameda-backup
     restart: unless-stopped
     environment:
-      TZ: ${TZ:-UTC}
+      TZ: ${TZ:-Europe/Moscow}
       BACKUP_HOUR: ${BACKUP_HOUR:-3}
       BACKUP_MINUTE: ${BACKUP_MINUTE:-10}
       BACKUP_KEEP_LAST: ${BACKUP_KEEP_LAST:-14}

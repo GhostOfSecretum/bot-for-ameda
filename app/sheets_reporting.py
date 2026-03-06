@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -10,6 +9,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import gspread
 from google.oauth2.service_account import Credentials
 from gspread.exceptions import WorksheetNotFound
+
+from app.time_utils import now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,7 @@ class GoogleSheetsReporter:
             issue_comments,
             str(len(required_photos)),
             dashboard_link,
-            datetime.utcnow().isoformat(timespec="seconds"),
+            now_iso(timespec="seconds"),
         ]
 
     def _build_dashboard_link(self, inspection_id: str) -> str:

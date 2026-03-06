@@ -5,6 +5,7 @@ DATA_DIR="${DATA_DIR:-/data}"
 BACKUP_DIR="${BACKUP_DIR:-/backup}"
 BACKUP_PREFIX="${BACKUP_PREFIX:-ameda_data}"
 BACKUP_KEEP_LAST="${BACKUP_KEEP_LAST:-14}"
+export TZ="${TZ:-Europe/Moscow}"
 
 case "$BACKUP_KEEP_LAST" in
   ''|*[!0-9]*)
