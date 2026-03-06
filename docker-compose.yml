@@ -24,8 +24,6 @@ services:
     command: streamlit run admin_dashboard.py --server.address=0.0.0.0 --server.port=8501
     ports:
       - "8501:8501"
-    profiles:
-      - dashboard
 
   backup:
     image: alpine:3.20

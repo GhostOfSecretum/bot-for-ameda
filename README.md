@@ -129,14 +129,14 @@ nano .env
 
 ### 5.4 Сборка и запуск
 
-Запуск Telegram-бота с автобэкапом:
+Запуск бота + админ-панели + автобэкапа:
 ```bash
 docker compose up -d --build
 ```
 
-Запуск бота + админ-панели:
+Если нужно поднять только Telegram-бота и backup (без панели):
 ```bash
-docker compose --profile dashboard up -d --build
+docker compose up -d --build bot backup
 ```
 
 ### 5.5 Полезные команды
