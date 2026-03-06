@@ -1,0 +1,51 @@
+services:
+  bot:
+    build: .
+    container_name: ameda-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - backup
+    volumes:
+      - ameda_data:/app/data
+    command: python run_bot.py
+
+  dashboard:
+    build: .
+    container_name: ameda-dashboard
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - backup
+    volumes:
+      - ameda_data:/app/data
+    command: streamlit run admin_dashboard.py --server.address=0.0.0.0 --server.port=8501
+    ports:
+      - "8501:8501"
+    profiles:
+      - dashboard
+
+  backup:
+    image: alpine:3.20
+    container_name: ameda-backup
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-UTC}
+      BACKUP_HOUR: ${BACKUP_HOUR:-3}
+      BACKUP_MINUTE: ${BACKUP_MINUTE:-10}
+      BACKUP_KEEP_LAST: ${BACKUP_KEEP_LAST:-14}
+      BACKUP_PREFIX: ${BACKUP_PREFIX:-ameda_data}
+      DATA_DIR: /data
+      BACKUP_DIR: /backup
+    volumes:
+      - ameda_data:/data:ro
+      - ./backups:/backup
+      - ./scripts/backup-once.sh:/usr/local/bin/backup-once.sh:ro
+      - ./scripts/start-backup-cron.sh:/usr/local/bin/start-backup-cron.sh:ro
+    command: sh /usr/local/bin/start-backup-cron.sh
+
+volumes:
+  ameda_data:
+    name: ameda_data

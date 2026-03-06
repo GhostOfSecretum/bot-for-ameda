@@ -1,0 +1,25 @@
+.env
+.env.*
+!.env.example
+
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+.DS_Store
+
+# Runtime data and backups
+data/
+backups/
+*.tar
+*.tar.gz
+
+# Local credentials and secrets
+credentials/*.json
+
+# IDE and cache
+.cursor/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
