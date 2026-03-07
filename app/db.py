@@ -27,6 +27,7 @@ class Database:
                     telegram_id INTEGER PRIMARY KEY,
                     full_name TEXT,
                     phone TEXT,
+                    personal_data_consent INTEGER,
                     role TEXT NOT NULL DEFAULT 'driver',
                     language TEXT NOT NULL DEFAULT 'ru',
                     is_active INTEGER NOT NULL DEFAULT 1,
@@ -120,6 +121,8 @@ class Database:
             user_columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
             if "phone" not in user_columns:
                 conn.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+            if "personal_data_consent" not in user_columns:
+                conn.execute("ALTER TABLE users ADD COLUMN personal_data_consent INTEGER")
             if "language" not in user_columns:
                 conn.execute("ALTER TABLE users ADD COLUMN language TEXT NOT NULL DEFAULT 'ru'")
 
@@ -172,6 +175,7 @@ class Database:
         telegram_id: int,
         full_name: str | None = None,
         phone: str | None = None,
+        personal_data_consent: bool | None = None,
         role: str | None = None,
         language: str | None = None,
     ) -> None:
@@ -180,33 +184,82 @@ class Database:
 
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT telegram_id, full_name, phone, role, language FROM users WHERE telegram_id = ?",
+                """
+                SELECT telegram_id, full_name, phone, personal_data_consent, role, language
+                FROM users
+                WHERE telegram_id = ?
+                """,
                 (telegram_id,),
             ).fetchone()
             now = self._now()
             if row:
                 next_full_name = full_name if full_name is not None else row["full_name"]
                 next_phone = phone if phone is not None else row["phone"]
+                next_personal_data_consent = (
+                    int(personal_data_consent)
+                    if personal_data_consent is not None
+                    else row["personal_data_consent"]
+                )
                 next_role = role if role is not None else row["role"]
                 next_language = language if language is not None else row["language"]
                 conn.execute(
                     """
                     UPDATE users
-                    SET full_name = ?, phone = ?, role = ?, language = ?, updated_at = ?, is_active = 1
+                    SET full_name = ?,
+                        phone = ?,
+                        personal_data_consent = ?,
+                        role = ?,
+                        language = ?,
+                        updated_at = ?,
+                        is_active = 1
                     WHERE telegram_id = ?
                     """,
-                    (next_full_name, next_phone, next_role, next_language, now, telegram_id),
+                    (
+                        next_full_name,
+                        next_phone,
+                        next_personal_data_consent,
+                        next_role,
+                        next_language,
+                        now,
+                        telegram_id,
+                    ),
                 )
             else:
                 conn.execute(
                     """
                     INSERT INTO users (
-                        telegram_id, full_name, phone, role, language, is_active, created_at, updated_at
+                        telegram_id,
+                        full_name,
+                        phone,
+                        personal_data_consent,
+                        role,
+                        language,
+                        is_active,
+                        created_at,
+                        updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
                     """,
-                    (telegram_id, full_name, phone, role or "driver", language or "ru", now, now),
+                    (
+                        telegram_id,
+                        full_name,
+                        phone,
+                        int(personal_data_consent) if personal_data_consent is not None else None,
+                        role or "driver",
+                        language or "ru",
+                        now,
+                        now,
+                    ),
                 )
+
+    def get_personal_data_consent(self, telegram_id: int) -> bool | None:
+        user = self.get_user(telegram_id)
+        if not user:
+            return None
+        raw_value = user["personal_data_consent"]
+        if raw_value is None:
+            return None
+        return bool(raw_value)
 
     def get_user(self, telegram_id: int) -> sqlite3.Row | None:
         with self._connect() as conn:

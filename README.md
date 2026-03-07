@@ -28,6 +28,7 @@
    - `BOT_TOKEN` — токен вашего бота
    - `MECHANIC_GROUP_ID` — ID группы механиков (бот должен быть в группе)
    - `SUPERADMIN_IDS` — ваш Telegram user_id (можно список через запятую)
+   - `ALLOWED_EMPLOYEE_IDS` — whitelist Telegram user_id сотрудников (через запятую). Если оставить пустым, whitelist временно не применяется.
 6. Запустите бота:
    ```bash
    python run_bot.py
@@ -116,6 +117,10 @@ nano .env
 - `MECHANIC_GROUP_ID`
 - `SUPERADMIN_IDS`
 - `ADMIN_DASHBOARD_PASSWORD`
+
+Опционально для ограничения доступа к боту:
+- `ALLOWED_EMPLOYEE_IDS` — Telegram user_id сотрудников через запятую.  
+  Если значение пустое, whitelist не применяется.
 
 Пути `DATABASE_PATH=data/inspection.db` и `PHOTOS_DIR=data/photos` оставьте как есть,  
 они уже соответствуют Docker named volume `ameda_data:/app/data`.

@@ -12,6 +12,7 @@ class Settings:
     bot_token: str
     mechanic_group_id: int
     superadmin_ids: list[int]
+    allowed_employee_ids: list[int]
     database_path: Path
     photos_dir: Path
     admin_dashboard_password: str
@@ -32,6 +33,7 @@ def load_settings() -> Settings:
     bot_token = os.getenv("BOT_TOKEN", "").strip()
     mechanic_group_id = int(os.getenv("MECHANIC_GROUP_ID", "0"))
     superadmin_ids = _parse_int_list(os.getenv("SUPERADMIN_IDS", ""))
+    allowed_employee_ids = _parse_int_list(os.getenv("ALLOWED_EMPLOYEE_IDS", ""))
     database_path = Path(os.getenv("DATABASE_PATH", "data/inspection.db"))
     photos_dir = Path(os.getenv("PHOTOS_DIR", "data/photos"))
     admin_dashboard_password = os.getenv("ADMIN_DASHBOARD_PASSWORD", "change_me")
@@ -56,6 +58,7 @@ def load_settings() -> Settings:
         bot_token=bot_token,
         mechanic_group_id=mechanic_group_id,
         superadmin_ids=superadmin_ids,
+        allowed_employee_ids=allowed_employee_ids,
         database_path=database_path,
         photos_dir=photos_dir,
         admin_dashboard_password=admin_dashboard_password,

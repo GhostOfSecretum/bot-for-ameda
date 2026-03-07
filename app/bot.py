@@ -45,6 +45,7 @@ from app.keyboards import (
     daily_refuel_decision_keyboard,
     language_keyboard,
     mechanic_decision_keyboard,
+    personal_data_consent_keyboard,
     request_location_keyboard,
     simple_reply_keyboard,
     submit_report_keyboard,
@@ -60,6 +61,7 @@ except Exception:  # pragma: no cover - optional dependency path
 
 
 logger = logging.getLogger(__name__)
+PERSONAL_DATA_POLICY_URL = "https://telegra.ph/Politika-Personalnyh-Dannyh-03-06-2"
 
 
 @dataclass
@@ -67,6 +69,7 @@ class InspectionDraft:
     driver_tg_id: int
     language: str | None = None
     waiting_for_language_selection: bool = False
+    waiting_for_personal_data_consent: bool = False
     waiting_for_registration_full_name: bool = False
     waiting_for_registration_phone: bool = False
     pending_registration_full_name: str | None = None
@@ -87,6 +90,7 @@ class InspectionDraft:
     waiting_for_required_location: bool = False
     required_location: tuple[float, float] | None = None
     equipment_type_display_to_raw: dict[str, str] = field(default_factory=dict)
+    inspection_flow_started: bool = False
     waiting_for_daily_actions_root: bool = False
     waiting_for_daily_actions_submenu: bool = False
     daily_actions_display_to_key: dict[str, str] = field(default_factory=dict)
@@ -167,6 +171,10 @@ class InspectionBot:
         self.router.message.register(self.on_photo, F.photo)
         self.router.message.register(self.on_location, F.location)
         self.router.callback_query.register(self.on_language_selected, F.data.startswith("lang:"))
+        self.router.callback_query.register(
+            self.on_registration_consent,
+            F.data.startswith("regconsent:"),
+        )
         self.router.callback_query.register(self.on_item_answer, F.data.startswith("item:"))
         self.router.callback_query.register(self.on_required_photo_action, F.data.startswith("req_photo:"))
         self.router.callback_query.register(self.on_mechanic_decision, F.data.startswith("mechanic:"))
@@ -251,6 +259,49 @@ class InspectionBot:
                 inspection_id,
             )
 
+    async def _export_end_workday_report_to_google_sheets(
+        self,
+        report: dict[str, Any],
+        *,
+        end_workday_location: tuple[float, float] | None,
+        required_photo_count: int,
+        total_photo_count: int,
+    ) -> None:
+        if self.sheets_reporter is None and not self._try_init_sheets_reporter():
+            return
+        report_id = report.get("id")
+        summary = {
+            "report": report,
+            "location": end_workday_location,
+            "required_photo_count": required_photo_count,
+            "total_photo_count": total_photo_count,
+        }
+        try:
+            await asyncio.to_thread(self.sheets_reporter.append_end_workday_report, summary)
+        except Exception:
+            logger.exception(
+                "Failed to export end-workday report #%s to Google Sheets",
+                report_id,
+            )
+
+    async def _export_daily_action_report_to_google_sheets(
+        self,
+        report: dict[str, Any],
+    ) -> None:
+        if self.sheets_reporter is None and not self._try_init_sheets_reporter():
+            return
+        report_id = report.get("id")
+        action_key = report.get("action_key")
+        if action_key == "end_workday":
+            return
+        try:
+            await asyncio.to_thread(self.sheets_reporter.append_daily_action_report, report)
+        except Exception:
+            logger.exception(
+                "Failed to export daily action report #%s to Google Sheets",
+                report_id,
+            )
+
     async def _notify_missing_required_photos_delayed(self, user_id: int, chat_id: int) -> None:
         try:
             await asyncio.sleep(1.2)
@@ -310,6 +361,44 @@ class InspectionBot:
         language = user["language"] if "language" in user.keys() else None
         return normalize_language(language)
 
+    @staticmethod
+    def _personal_data_consent_status(user: Any | None) -> bool | None:
+        if not user:
+            return None
+        if "personal_data_consent" not in user.keys():
+            return None
+        value = user["personal_data_consent"]
+        if value is None:
+            return None
+        return bool(value)
+
+    async def _ensure_personal_data_consent_message(self, message: Message) -> bool:
+        if not message.from_user:
+            return False
+        user = self.db.get_user(message.from_user.id)
+        lang = self._user_language(user)
+        consent_status = self._personal_data_consent_status(user)
+        if consent_status is True:
+            return True
+        key = (
+            "registration_consent_declined"
+            if consent_status is False
+            else "consent_required_before_registration"
+        )
+        await message.answer(t(lang, key))
+        return False
+
+    async def _ensure_personal_data_consent_callback(self, callback: CallbackQuery) -> bool:
+        if not callback.from_user:
+            return False
+        user = self.db.get_user(callback.from_user.id)
+        lang = self._user_language(user)
+        consent_status = self._personal_data_consent_status(user)
+        if consent_status is True:
+            return True
+        await callback.answer(t(lang, "consent_interaction_blocked_short"), show_alert=True)
+        return False
+
     def _draft_language(
         self,
         *,
@@ -326,6 +415,37 @@ class InspectionBot:
             draft.language = lang
         return lang
 
+    def _is_user_allowed(self, user_id: int) -> bool:
+        allowed_ids = self.settings.allowed_employee_ids
+        if not allowed_ids:
+            # Empty whitelist means "not enforced yet".
+            return True
+        if user_id in self.settings.superadmin_ids:
+            return True
+        return user_id in allowed_ids
+
+    async def _ensure_message_access(self, message: Message) -> bool:
+        if not message.from_user:
+            return False
+        user_id = message.from_user.id
+        if self._is_user_allowed(user_id):
+            return True
+        user = self.db.get_user(user_id)
+        lang = self._user_language(user)
+        await message.answer(t(lang, "access_denied_whitelist"))
+        return False
+
+    async def _ensure_callback_access(self, callback: CallbackQuery) -> bool:
+        if not callback.from_user:
+            return False
+        user_id = callback.from_user.id
+        if self._is_user_allowed(user_id):
+            return True
+        user = self.db.get_user(user_id)
+        lang = self._user_language(user)
+        await callback.answer(t(lang, "access_denied_whitelist"), show_alert=True)
+        return False
+
     async def _start_registration(
         self,
         message: Message,
@@ -334,10 +454,26 @@ class InspectionBot:
         continue_to_inspection: bool,
     ) -> None:
         lang = self._draft_language(user_id=draft.driver_tg_id, draft=draft)
-        draft.waiting_for_registration_full_name = True
+        draft.waiting_for_personal_data_consent = False
+        draft.waiting_for_registration_full_name = False
         draft.waiting_for_registration_phone = False
         draft.pending_registration_full_name = None
         draft.start_after_registration = continue_to_inspection
+        consent_status = self.db.get_personal_data_consent(draft.driver_tg_id)
+        if consent_status is not True:
+            draft.waiting_for_personal_data_consent = True
+            await message.answer(t(lang, "registration_consent_policy_hint"))
+            await message.answer(
+                t(lang, "registration_consent_prompt"),
+                reply_markup=personal_data_consent_keyboard(
+                    policy_text=t(lang, "registration_consent_policy_button"),
+                    policy_url=PERSONAL_DATA_POLICY_URL,
+                    agree_text=t(lang, "registration_consent_agree_button"),
+                    decline_text=t(lang, "registration_consent_decline_button"),
+                ),
+            )
+            return
+        draft.waiting_for_registration_full_name = True
         await message.answer(t(lang, "registration_start"))
 
     async def _continue_start_flow(self, message: Message, user_id: int) -> None:
@@ -345,8 +481,32 @@ class InspectionBot:
         if db_user is None:
             self.db.upsert_user(user_id, role="driver")
             db_user = self.db.get_user(user_id)
+        draft = self._get_or_create_draft(user_id)
+        lang = self._user_language(db_user)
+        if (
+            draft.inspection_flow_started
+            and draft.driver_license_type is not None
+        ):
+            draft.language = lang
+            if draft.equipment_type is None:
+                await self._ask_equipment_type(message, draft)
+                return
+            if draft.equipment_brand is None:
+                await self._ask_equipment_brand(message, draft)
+                return
+            if draft.equipment_id is None:
+                await self._ask_equipment_number(message, draft)
+                return
+            if draft.inspection_id is not None:
+                await message.answer(t(lang, "go_to_inspection"))
+                return
+            await self._ask_equipment_number(message, draft)
+            return
         draft = self._reset_draft(user_id)
-        draft.language = self._user_language(db_user)
+        draft.language = lang
+        if self.db.get_personal_data_consent(user_id) is not True:
+            await self._start_registration(message, draft, continue_to_inspection=True)
+            return
         if not self._is_registered(db_user):
             await self._start_registration(message, draft, continue_to_inspection=True)
             return
@@ -355,6 +515,8 @@ class InspectionBot:
 
     async def cmd_start(self, message: Message) -> None:
         if not message.from_user:
+            return
+        if not await self._ensure_message_access(message):
             return
         user_id = message.from_user.id
         db_user = self.db.get_user(user_id)
@@ -373,6 +535,8 @@ class InspectionBot:
     async def on_language_selected(self, callback: CallbackQuery) -> None:
         if not callback.from_user or not callback.data or not callback.message:
             return
+        if not await self._ensure_callback_access(callback):
+            return
         user_id = callback.from_user.id
         _, language = callback.data.split(":", maxsplit=1)
         language = normalize_language(language)
@@ -381,10 +545,58 @@ class InspectionBot:
         draft.language = language
         draft.waiting_for_language_selection = False
         await callback.answer(t(language, "language_saved"))
+        await self._try_clear_inline_keyboard(callback)
         await self._continue_start_flow(callback.message, user_id)
+
+    async def on_registration_consent(self, callback: CallbackQuery) -> None:
+        if not callback.from_user or not callback.data or not callback.message:
+            return
+        if not await self._ensure_callback_access(callback):
+            return
+        user_id = callback.from_user.id
+        draft = self._get_or_create_draft(user_id)
+        lang = self._draft_language(user_id=user_id, draft=draft)
+        _, action = callback.data.split(":", maxsplit=1)
+
+        if action == "agree":
+            self.db.upsert_user(
+                telegram_id=user_id,
+                personal_data_consent=True,
+                role=None,
+                language=lang,
+            )
+            draft.waiting_for_personal_data_consent = False
+            draft.waiting_for_registration_full_name = True
+            draft.waiting_for_registration_phone = False
+            draft.pending_registration_full_name = None
+            await self._try_clear_inline_keyboard(callback)
+            await callback.answer(t(lang, "registration_consent_accepted"))
+            await callback.message.answer(t(lang, "registration_start"))
+            return
+
+        if action == "decline":
+            self.db.upsert_user(
+                telegram_id=user_id,
+                personal_data_consent=False,
+                role=None,
+                language=lang,
+            )
+            draft.waiting_for_personal_data_consent = False
+            draft.waiting_for_registration_full_name = False
+            draft.waiting_for_registration_phone = False
+            draft.pending_registration_full_name = None
+            draft.start_after_registration = False
+            await self._try_clear_inline_keyboard(callback)
+            await callback.answer()
+            await callback.message.answer(t(lang, "registration_consent_declined"))
+            return
+
+        await callback.answer(t(lang, "invalid_button"), show_alert=True)
 
     async def cmd_register(self, message: Message) -> None:
         if not message.from_user:
+            return
+        if not await self._ensure_message_access(message):
             return
         user_id = message.from_user.id
         user = self.db.get_user(user_id)
@@ -398,6 +610,10 @@ class InspectionBot:
     async def cmd_actions(self, message: Message) -> None:
         if not message.from_user:
             return
+        if not await self._ensure_message_access(message):
+            return
+        if not await self._ensure_personal_data_consent_message(message):
+            return
         user_id = message.from_user.id
         if self.db.get_user(user_id) is None:
             self.db.upsert_user(user_id, role="driver")
@@ -407,6 +623,10 @@ class InspectionBot:
 
     async def cmd_endday(self, message: Message) -> None:
         if not message.from_user:
+            return
+        if not await self._ensure_message_access(message):
+            return
+        if not await self._ensure_personal_data_consent_message(message):
             return
         user_id = message.from_user.id
         if self.db.get_user(user_id) is None:
@@ -426,13 +646,19 @@ class InspectionBot:
         await self._ask_daily_end_workday_refuel(message, draft, lang=lang)
 
     async def cmd_help(self, message: Message) -> None:
-        user_id = message.from_user.id if message.from_user else 0
-        draft = self._get_or_create_draft(user_id) if message.from_user else None
+        if not message.from_user:
+            return
+        if not await self._ensure_message_access(message):
+            return
+        user_id = message.from_user.id
+        draft = self._get_or_create_draft(user_id)
         lang = self._draft_language(user_id=user_id, draft=draft)
         await message.answer(t(lang, "help_text"))
 
     async def cmd_role(self, message: Message) -> None:
         if not message.from_user:
+            return
+        if not await self._ensure_message_access(message):
             return
         user = self.db.get_user(message.from_user.id)
         lang = self._user_language(user)
@@ -441,6 +667,8 @@ class InspectionBot:
 
     async def cmd_setrole(self, message: Message) -> None:
         if not message.from_user or not message.text:
+            return
+        if not await self._ensure_message_access(message):
             return
         actor = self.db.get_user(message.from_user.id)
         lang = self._user_language(actor)
@@ -463,6 +691,8 @@ class InspectionBot:
     async def on_text(self, message: Message) -> None:
         if not message.from_user or not message.text:
             return
+        if not await self._ensure_message_access(message):
+            return
         user_id = message.from_user.id
         text = message.text.strip()
         draft = self._get_or_create_draft(user_id)
@@ -474,6 +704,21 @@ class InspectionBot:
                 t(lang, "choose_language_buttons_hint"),
                 reply_markup=language_keyboard(selected_language=lang),
             )
+            return
+
+        if draft.waiting_for_personal_data_consent:
+            await message.answer(
+                t(lang, "registration_consent_buttons_hint"),
+                reply_markup=personal_data_consent_keyboard(
+                    policy_text=t(lang, "registration_consent_policy_button"),
+                    policy_url=PERSONAL_DATA_POLICY_URL,
+                    agree_text=t(lang, "registration_consent_agree_button"),
+                    decline_text=t(lang, "registration_consent_decline_button"),
+                ),
+            )
+            return
+
+        if not await self._ensure_personal_data_consent_message(message):
             return
 
         menu_button_label = t(lang, "daily_actions_menu_button")
@@ -771,6 +1016,10 @@ class InspectionBot:
             await message.answer(t(lang, "not_registered"))
             return
 
+        if draft.driver_license_type is None and not draft.inspection_flow_started:
+            await message.answer(t(lang, "use_commands_hint"))
+            return
+
         if back_requested and draft.inspection_id is None:
             if draft.equipment_id is not None:
                 draft.equipment_id = None
@@ -782,6 +1031,7 @@ class InspectionBot:
                 return
             if draft.equipment_type is not None:
                 draft.equipment_type = None
+                draft.equipment_brand = None
                 await self._ask_equipment_type(message, draft)
                 return
             if draft.driver_license_type is not None:
@@ -809,6 +1059,7 @@ class InspectionBot:
                 await message.answer(t(lang, "choose_type_buttons"))
                 return
             draft.equipment_type = raw_type
+            draft.equipment_brand = None
             await self._ask_equipment_brand(message, draft)
             return
 
@@ -895,6 +1146,10 @@ class InspectionBot:
 
     async def on_photo(self, message: Message) -> None:
         if not message.from_user or not message.photo:
+            return
+        if not await self._ensure_message_access(message):
+            return
+        if not await self._ensure_personal_data_consent_message(message):
             return
         user_id = message.from_user.id
         lock = self._get_photo_lock(user_id)
@@ -1070,6 +1325,10 @@ class InspectionBot:
     async def on_location(self, message: Message) -> None:
         if not message.from_user or not message.location:
             return
+        if not await self._ensure_message_access(message):
+            return
+        if not await self._ensure_personal_data_consent_message(message):
+            return
 
         user_id = message.from_user.id
         draft = self._get_or_create_draft(user_id)
@@ -1165,6 +1424,10 @@ class InspectionBot:
     async def on_item_answer(self, callback: CallbackQuery) -> None:
         if not callback.from_user or not callback.data or not callback.message:
             return
+        if not await self._ensure_callback_access(callback):
+            return
+        if not await self._ensure_personal_data_consent_callback(callback):
+            return
         user_id = callback.from_user.id
         draft = self._get_or_create_draft(user_id)
         lang = self._draft_language(user_id=user_id, draft=draft)
@@ -1250,6 +1513,10 @@ class InspectionBot:
     async def on_required_photo_action(self, callback: CallbackQuery) -> None:
         if not callback.from_user or not callback.data or not callback.message:
             return
+        if not await self._ensure_callback_access(callback):
+            return
+        if not await self._ensure_personal_data_consent_callback(callback):
+            return
         user_id = callback.from_user.id
         draft = self._get_or_create_draft(user_id)
         lang = self._draft_language(user_id=user_id, draft=draft)
@@ -1299,6 +1566,8 @@ class InspectionBot:
 
     async def on_mechanic_decision(self, callback: CallbackQuery) -> None:
         if not callback.from_user or not callback.data or not callback.message:
+            return
+        if not await self._ensure_callback_access(callback):
             return
         user = self.db.get_user(callback.from_user.id)
         lang = self._user_language(user)
@@ -1354,6 +1623,8 @@ class InspectionBot:
 
     async def on_daily_refuel_decision(self, callback: CallbackQuery) -> None:
         if not callback.from_user or not callback.data or not callback.message:
+            return
+        if not await self._ensure_callback_access(callback):
             return
         user = self.db.get_user(callback.from_user.id)
         lang = self._user_language(user)
@@ -1450,6 +1721,7 @@ class InspectionBot:
         display_map = driver_license_type_display_map(lang)
         options = list(display_map.keys())
         draft.driver_license_type_display_to_raw = display_map
+        draft.inspection_flow_started = True
         await message.answer(
             t(lang, "select_driver_license_type"),
             reply_markup=simple_reply_keyboard(options, width=2),
@@ -1943,6 +2215,14 @@ class InspectionBot:
                         len(endday_paths),
                     )
                     self.db.mark_daily_action_report_delivery(report_id, status="failed")
+                    export_report = self.db.get_daily_action_report(report_id)
+                    if export_report is not None:
+                        await self._export_end_workday_report_to_google_sheets(
+                            dict(export_report),
+                            end_workday_location=end_workday_location,
+                            required_photo_count=len(end_workday_photo_paths),
+                            total_photo_count=len(endday_paths),
+                        )
                     await message.answer(t(lang, "daily_report_delivery_failed"))
                     return
 
@@ -1973,6 +2253,14 @@ class InspectionBot:
                     status="sent",
                     mechanic_message_id=sent_message.message_id,
                 )
+                export_report = self.db.get_daily_action_report(report_id)
+                if export_report is not None:
+                    await self._export_end_workday_report_to_google_sheets(
+                        dict(export_report),
+                        end_workday_location=end_workday_location,
+                        required_photo_count=len(end_workday_photo_paths),
+                        total_photo_count=len(endday_paths),
+                    )
                 self.db.add_audit(
                     actor_telegram_id=draft.driver_tg_id,
                     action=f"daily_report_sent_{action_key}",
@@ -2024,6 +2312,9 @@ class InspectionBot:
                 status="sent",
                 mechanic_message_id=sent_message.message_id,
             )
+            export_report = self.db.get_daily_action_report(report_id)
+            if export_report is not None:
+                await self._export_daily_action_report_to_google_sheets(dict(export_report))
         except (TelegramBadRequest, TelegramForbiddenError):
             logger.exception(
                 "Failed to deliver daily action report action=%s user_id=%s",
@@ -2031,6 +2322,9 @@ class InspectionBot:
                 draft.driver_tg_id,
             )
             self.db.mark_daily_action_report_delivery(report_id, status="failed")
+            export_report = self.db.get_daily_action_report(report_id)
+            if export_report is not None:
+                await self._export_daily_action_report_to_google_sheets(dict(export_report))
             await message.answer(t(lang, "daily_report_delivery_failed"))
             return
 

@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 REPORTS_SHEET_TITLE = "Отчеты"
 GROUPED_SHEET_TITLE = "Группировка"
+END_WORKDAY_SHEET_TITLE = "Завершение смены"
+DAILY_ACTIONS_SHEET_TITLE = "Действия в течении дня"
 
 REPORT_HEADERS = [
     "ID отчета",
@@ -44,6 +46,46 @@ GROUPED_HEADERS = [
     "Сумма замечаний",
 ]
 
+END_WORKDAY_HEADERS = [
+    "ID отчета действий",
+    "Дата отчета",
+    "Время отчета",
+    "Сотрудник",
+    "Телефон",
+    "Статус заправки (ключ)",
+    "Статус заправки",
+    "Комментарий",
+    "Геолокация",
+    "Связанная приемка",
+    "Статус доставки",
+    "ID сообщения в группе",
+    "Фото ГСМ",
+    "Обязательных фото",
+    "Всего фото",
+    "Экспортировано в",
+]
+
+DAILY_ACTION_HEADERS = [
+    "ID отчета действий",
+    "Дата отчета",
+    "Время отчета",
+    "Сотрудник",
+    "Телефон",
+    "Действие (ключ)",
+    "Действие",
+    "Статус (ключ)",
+    "Статус",
+    "Комментарий",
+    "Связанная приемка",
+    "Статус доставки",
+    "ID сообщения в группе",
+    "Фото",
+    "Решение по ГСМ",
+    "Кто решил ГСМ",
+    "Время решения ГСМ",
+    "Экспортировано в",
+]
+
 
 class GoogleSheetsReporter:
     def __init__(
@@ -64,12 +106,30 @@ class GoogleSheetsReporter:
         self.admin_dashboard_base_url = admin_dashboard_base_url.rstrip("/") if admin_dashboard_base_url else None
         self.reports_sheet = self._get_or_create_sheet(REPORTS_SHEET_TITLE, rows=1000, cols=20)
         self.grouped_sheet = self._get_or_create_sheet(GROUPED_SHEET_TITLE, rows=1000, cols=12)
+        self.end_workday_sheet = self._get_or_create_sheet(
+            END_WORKDAY_SHEET_TITLE,
+            rows=1000,
+            cols=20,
+        )
+        self.daily_actions_sheet = self._get_or_create_sheet(
+            DAILY_ACTIONS_SHEET_TITLE,
+            rows=1000,
+            cols=24,
+        )
         self._ensure_headers()
 
     def append_report(self, summary: dict[str, Any]) -> None:
         row = self._build_report_row(summary)
         self.reports_sheet.append_row(row, value_input_option="USER_ENTERED")
         self._rebuild_grouped_sheet()
+
+    def append_end_workday_report(self, summary: dict[str, Any]) -> None:
+        row = self._build_end_workday_row(summary)
+        self.end_workday_sheet.append_row(row, value_input_option="USER_ENTERED")
+
+    def append_daily_action_report(self, report: dict[str, Any]) -> None:
+        row = self._build_daily_action_row(report)
+        self.daily_actions_sheet.append_row(row, value_input_option="USER_ENTERED")
 
     def _get_or_create_sheet(self, title: str, *, rows: int, cols: int):
         try:
@@ -86,6 +146,14 @@ class GoogleSheetsReporter:
         grouped_header_row = self.grouped_sheet.row_values(1)
         if grouped_header_row[: len(GROUPED_HEADERS)] != GROUPED_HEADERS:
             self.grouped_sheet.update("A1", [GROUPED_HEADERS])
+
+        end_workday_header_row = self.end_workday_sheet.row_values(1)
+        if end_workday_header_row[: len(END_WORKDAY_HEADERS)] != END_WORKDAY_HEADERS:
+            self.end_workday_sheet.update("A1", [END_WORKDAY_HEADERS])
+
+        daily_action_header_row = self.daily_actions_sheet.row_values(1)
+        if daily_action_header_row[: len(DAILY_ACTION_HEADERS)] != DAILY_ACTION_HEADERS:
+            self.daily_actions_sheet.update("A1", [DAILY_ACTION_HEADERS])
 
     def _build_report_row(self, summary: dict[str, Any]) -> list[str]:
         inspection = summary["inspection"]
@@ -147,6 +215,91 @@ class GoogleSheetsReporter:
         except Exception:
             logger.exception("Failed to build dashboard URL for inspection_id=%s", inspection_id)
             return "-"
+
+    def _build_end_workday_row(self, summary: dict[str, Any]) -> list[str]:
+        report = summary["report"]
+
+        created_at = str(report.get("created_at") or "")
+        report_date = created_at.split("T", maxsplit=1)[0] if created_at else ""
+        report_time = created_at.split("T", maxsplit=1)[1] if "T" in created_at else ""
+
+        location = summary.get("location")
+        latitude: float | None = None
+        longitude: float | None = None
+        if isinstance(location, (tuple, list)) and len(location) == 2:
+            try:
+                latitude = float(location[0])
+                longitude = float(location[1])
+            except (TypeError, ValueError):
+                latitude = None
+                longitude = None
+
+        geo_text = "-"
+        if latitude is not None and longitude is not None:
+            coords_label = f"{latitude:.6f}, {longitude:.6f}"
+            map_url = f"https://maps.google.com/?q={latitude:.6f},{longitude:.6f}"
+            geo_text = f'=HYPERLINK("{map_url}"; "{coords_label}")'
+
+        linked_inspection_id = report.get("linked_inspection_id")
+        linked_inspection_ref = (
+            f"#{linked_inspection_id}" if linked_inspection_id is not None else "—"
+        )
+
+        required_photo_count = int(summary.get("required_photo_count") or 0)
+        total_photo_count = int(summary.get("total_photo_count") or 0)
+        fuel_photo_exists = "Да" if str(report.get("photo_path") or "").strip() else "Нет"
+
+        return [
+            str(report.get("id") or ""),
+            report_date,
+            report_time,
+            str(report.get("driver_full_name") or ""),
+            str(report.get("driver_phone") or ""),
+            str(report.get("status_key") or ""),
+            str(report.get("status_label") or ""),
+            str(report.get("comment") or ""),
+            geo_text,
+            linked_inspection_ref,
+            str(report.get("delivery_status") or ""),
+            str(report.get("mechanic_message_id") or ""),
+            fuel_photo_exists,
+            str(required_photo_count),
+            str(total_photo_count),
+            now_iso(timespec="seconds"),
+        ]
+
+    def _build_daily_action_row(self, report: dict[str, Any]) -> list[str]:
+        created_at = str(report.get("created_at") or "")
+        report_date = created_at.split("T", maxsplit=1)[0] if created_at else ""
+        report_time = created_at.split("T", maxsplit=1)[1] if "T" in created_at else ""
+
+        linked_inspection_id = report.get("linked_inspection_id")
+        linked_inspection_ref = (
+            f"#{linked_inspection_id}" if linked_inspection_id is not None else "—"
+        )
+
+        photo_exists = "Да" if str(report.get("photo_path") or "").strip() else "Нет"
+
+        return [
+            str(report.get("id") or ""),
+            report_date,
+            report_time,
+            str(report.get("driver_full_name") or ""),
+            str(report.get("driver_phone") or ""),
+            str(report.get("action_key") or ""),
+            str(report.get("action_label") or ""),
+            str(report.get("status_key") or ""),
+            str(report.get("status_label") or ""),
+            str(report.get("comment") or ""),
+            linked_inspection_ref,
+            str(report.get("delivery_status") or ""),
+            str(report.get("mechanic_message_id") or ""),
+            photo_exists,
+            str(report.get("fuel_decision") or ""),
+            str(report.get("fuel_decision_by") or ""),
+            str(report.get("fuel_decision_at") or ""),
+            now_iso(timespec="seconds"),
+        ]
 
     def _rebuild_grouped_sheet(self) -> None:
         records = self.reports_sheet.get_all_records(default_blank="")

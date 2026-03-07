@@ -101,6 +101,21 @@ def language_keyboard(selected_language: str | None = None) -> InlineKeyboardMar
     return builder.as_markup()
 
 
+def personal_data_consent_keyboard(
+    *,
+    policy_text: str,
+    policy_url: str,
+    agree_text: str,
+    decline_text: str,
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text=policy_text, url=policy_url)
+    builder.button(text=agree_text, callback_data="regconsent:agree")
+    builder.button(text=decline_text, callback_data="regconsent:decline")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def mechanic_decision_keyboard(inspection_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(

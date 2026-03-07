@@ -1,0 +1,147 @@
+# Инструкция по разворачиванию проекта из `.tar`
+
+Документ для передачи коллегам, которые поднимают сервис на новой виртуальной машине.
+
+## 1. Требования к виртуальной машине
+
+- **ОС:** Ubuntu 22.04 LTS (x86_64) или Ubuntu 24.04 LTS
+- **CPU:** 2 vCPU (рекомендуется 4 vCPU при высокой нагрузке)
+- **RAM:** 4 GB (рекомендуется 8 GB при активной админ-панели)
+- **Диск:** минимум 25 GB (лучше 40+ GB, если хранится много фото и бэкапов)
+- **Сеть:**
+  - исходящий доступ в интернет (для Telegram API и установки пакетов)
+  - входящий `22/tcp` (SSH)
+  - входящий `8501/tcp` только если нужен доступ к Streamlit-панели извне
+
+## 2. Установка Docker и Docker Compose plugin
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker $USER
+```
+
+После команды `usermod` нужно переподключиться по SSH.
+
+## 3. Загрузка и распаковка `tar`
+
+Пример: архив уже лежит в `/tmp/ameda-bot.tar`.
+
+```bash
+sudo mkdir -p /opt/ameda-bot
+sudo tar -xf /tmp/ameda-bot.tar -C /opt/ameda-bot
+sudo chown -R $USER:$USER /opt/ameda-bot
+cd /opt/ameda-bot
+```
+
+После распаковки в папке проекта должны быть минимум:
+- `docker-compose.yml`
+- `Dockerfile`
+- `.env.example`
+- `run_bot.py`
+
+## 4. Настройка переменных окружения
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Обязательные переменные:
+- `BOT_TOKEN`
+- `MECHANIC_GROUP_ID`
+- `SUPERADMIN_IDS`
+- `ADMIN_DASHBOARD_PASSWORD`
+
+Опционально для whitelist сотрудников:
+- `ALLOWED_EMPLOYEE_IDS` (Telegram user_id через запятую; если пусто, whitelist не применяется)
+
+Оставить как есть (обычно не менять):
+- `DATABASE_PATH=data/inspection.db`
+- `PHOTOS_DIR=data/photos`
+
+Опционально для Google Sheets:
+- `REPORTS_SPREADSHEET_ID`
+- `GOOGLE_SERVICE_ACCOUNT_JSON`
+- `ADMIN_DASHBOARD_BASE_URL`
+
+## 5. Сборка и запуск
+
+Запуск всех сервисов (бот, админ-панель, backup):
+
+```bash
+docker compose up -d --build
+```
+
+Проверка:
+
+```bash
+docker compose ps
+docker compose logs -f --tail=100 bot
+```
+
+Если панель не нужна:
+
+```bash
+docker compose up -d --build bot backup
+```
+
+## 6. Доступ к админ-панели
+
+- URL: `http://<IP_СЕРВЕРА>:8501`
+- Пароль: значение `ADMIN_DASHBOARD_PASSWORD` из `.env`
+
+Рекомендуется ограничить доступ к порту `8501` по IP (security group/firewall/reverse proxy).
+
+## 7. Остановка и перезапуск
+
+Остановка:
+
+```bash
+docker compose down
+```
+
+Перезапуск с пересборкой:
+
+```bash
+docker compose up -d --build --remove-orphans
+```
+
+## 8. Бэкапы
+
+Сервис `backup` запускается автоматически и:
+- делает бэкап при старте
+- затем делает ежедневные бэкапы
+- хранит последние `BACKUP_KEEP_LAST` архивов
+
+Архивы: `./backups`
+
+Ручной бэкап:
+
+```bash
+make backup
+```
+
+Восстановление:
+
+```bash
+make restore FILE=backups/ameda_data_YYYYMMDD_HHMMSS.tar.gz
+```
+
+## 9. Если передали не исходники, а Docker image `.tar`
+
+Если `.tar` был сделан командой `docker save`, развертывание другое:
+
+```bash
+docker load -i image.tar
+docker images
+```
+
+Далее нужен отдельный `docker-compose.yml` с `image: <tag>` или запуск через `docker run`.
+Для этого проекта штатный путь — передавать **исходники проекта в tar** и запускать через `docker compose up -d --build`.

@@ -325,6 +325,56 @@ TEXTS = {
         "tg": "Пеш аз оғози кор сабти номи корманд лозим аст.\nНому насабро пурра ворид кунед (масалан: Иванов Иван Иванович).",
         "uz": "Ishni boshlashdan oldin xodim ro'yxatdan o'tishi kerak.\nF.I.Sh.ni to'liq kiriting (masalan: Ivanov Ivan Ivanovich).",
     },
+    "registration_consent_prompt": {
+        "ru": "Нажимая кнопку «Согласен на обработку персональных данных», вы даёте согласие на обработку персональных данных (ФИО, номер телефона, фотографии, геолокация) для оформления заявки.",
+        "tg": "Бо пахши тугмаи «Ба коркарди маълумоти шахсӣ розӣ ҳастам», шумо ба коркарди маълумоти шахсӣ (Ному насаб, рақами телефон, аксҳо, геолокатсия) барои тартиб додани дархост розигӣ медиҳед.",
+        "uz": "«Shaxsiy ma'lumotlarni qayta ishlashga roziman» tugmasini bosib, ariza rasmiylashtirish uchun shaxsiy ma'lumotlaringizni (F.I.Sh., telefon raqami, fotosuratlar, geolokatsiya) qayta ishlashga rozilik berasiz.",
+    },
+    "registration_consent_policy_hint": {
+        "ru": "Перед согласием ознакомьтесь с политикой персональных данных по кнопке ниже.",
+        "tg": "Пеш аз розигӣ бо сиёсати маълумоти шахсӣ аз тугмаи поён шинос шавед.",
+        "uz": "Rozilik berishdan oldin quyidagi tugma orqali shaxsiy ma'lumotlar siyosati bilan tanishing.",
+    },
+    "registration_consent_policy_button": {
+        "ru": "Ознакомиться с политикой персональных данных",
+        "tg": "Шиносоӣ бо сиёсати маълумоти шахсӣ",
+        "uz": "Shaxsiy ma'lumotlar siyosati bilan tanishish",
+    },
+    "registration_consent_agree_button": {
+        "ru": "Согласен на обработку персональных данных",
+        "tg": "Ба коркарди маълумоти шахсӣ розӣ ҳастам",
+        "uz": "Shaxsiy ma'lumotlarni qayta ishlashga roziman",
+    },
+    "registration_consent_decline_button": {
+        "ru": "Не согласен",
+        "tg": "Розӣ нестам",
+        "uz": "Rozi emasman",
+    },
+    "registration_consent_buttons_hint": {
+        "ru": "Для продолжения выберите вариант кнопками ниже.",
+        "tg": "Барои идома, яке аз тугмаҳои поёнро интихоб кунед.",
+        "uz": "Davom etish uchun quyidagi tugmalardan birini tanlang.",
+    },
+    "registration_consent_accepted": {
+        "ru": "Согласие сохранено ✅",
+        "tg": "Розигӣ сабт шуд ✅",
+        "uz": "Rozilik saqlandi ✅",
+    },
+    "registration_consent_declined": {
+        "ru": "Вы отказались от обработки персональных данных. Дальнейшая работа с ботом недоступна, пока не дадите согласие через /start или /register.",
+        "tg": "Шумо аз коркарди маълумоти шахсӣ даст кашидед. Кори минбаъда бо бот дастнорас аст, то замоне ки бо /start ё /register розигӣ надиҳед.",
+        "uz": "Siz shaxsiy ma'lumotlarni qayta ishlashdan bosh tortdingiz. /start yoki /register orqali rozilik bermaguningizcha bot bilan keyingi ishlash mumkin emas.",
+    },
+    "consent_required_before_registration": {
+        "ru": "Сначала дайте согласие на обработку персональных данных через /start или /register.",
+        "tg": "Аввал бо /start ё /register ба коркарди маълумоти шахсӣ розигӣ диҳед.",
+        "uz": "Avval /start yoki /register orqali shaxsiy ma'lumotlarni qayta ishlashga rozilik bering.",
+    },
+    "consent_interaction_blocked_short": {
+        "ru": "Нужно согласие на обработку данных. Используйте /start или /register.",
+        "tg": "Розигӣ ба коркарди маълумот лозим аст. /start ё /register-ро истифода баред.",
+        "uz": "Ma'lumotlarni qayta ishlashga rozilik kerak. /start yoki /register dan foydalaning.",
+    },
     "start_new_inspection": {
         "ru": "Начинаем новую приемку.",
         "tg": "Қабули нави техникаро оғоз мекунем.",
@@ -710,6 +760,11 @@ TEXTS = {
         "tg": "Ҳуқуқи кофӣ нест. Фармон танҳо барои superadmin дастрас аст.",
         "uz": "Huquq yetarli emas. Buyruq faqat superadmin uchun.",
     },
+    "access_denied_whitelist": {
+        "ru": "Доступ к боту ограничен. Обратитесь к администратору для добавления в список сотрудников.",
+        "tg": "Дастрасӣ ба бот маҳдуд аст. Барои илова шудан ба рӯйхати кормандон ба администратор муроҷиат кунед.",
+        "uz": "Botga kirish cheklangan. Xodimlar ro'yxatiga qo'shilish uchun administratorga murojaat qiling.",
+    },
     "setrole_format": {
         "ru": "Формат: /setrole <telegram_id> <role>",
         "tg": "Намуна: /setrole <telegram_id> <role>",
@@ -945,6 +1000,11 @@ TEXTS = {
         "tg": "Амали номаълум.",
         "uz": "Noma'lum amal.",
     },
+    "use_commands_hint": {
+        "ru": "Используйте /start — приёмка техники, /endday — завершение смены, /actions — действия в смене.",
+        "tg": "Истифода баред: /start — қабули техника, /endday — анҷоми смена, /actions — амалҳои дар смена.",
+        "uz": "Ishlatiling: /start — texnika qabul qilish, /endday — smenani tugatish, /actions — smenadagi harakatlar.",
+    },
     "inspection_not_started": {
         "ru": "Приемка не начата.",
         "tg": "Қабул оғоз нашудааст.",
@@ -1153,6 +1213,7 @@ def daily_actions_display_map(language: str | None) -> dict[str, str]:
         t(language, "daily_action_blow_filters"): "blow_filters",
         t(language, "daily_action_workday_situations"): "workday_situations",
         t(language, "daily_action_refuel"): "refuel",
+        t(language, "daily_action_end_workday"): "end_workday",
     }
 
 
