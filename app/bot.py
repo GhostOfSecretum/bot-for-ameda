@@ -2543,14 +2543,72 @@ class InspectionBot:
         if len(report_caption) > 1024:
             report_caption = report_caption[:1019].rstrip() + "\n…"
 
-        # Send the decision message first, so mechanics see the report immediately
-        # even if photo uploads take longer on a slow server connection.
+        required_photos_sent_with_report = False
         try:
-            sent = await self.bot.send_message(
-                chat_id=self.settings.mechanic_group_id,
-                text=report_caption,
-                reply_markup=mechanic_decision_keyboard(inspection_id),
-            )
+            if len(required_photos_ordered) >= 2:
+                try:
+                    media = []
+                    for idx, (_, photo_path) in enumerate(required_photos_ordered):
+                        media.append(
+                            InputMediaPhoto(
+                                media=FSInputFile(photo_path),
+                                caption=report_caption if idx == 0 else None,
+                            )
+                        )
+                    sent_album = await self.bot.send_media_group(
+                        chat_id=self.settings.mechanic_group_id,
+                        media=media,
+                    )
+                    sent = sent_album[0]
+                    required_photos_sent_with_report = True
+                    try:
+                        await self.bot.edit_message_caption(
+                            chat_id=self.settings.mechanic_group_id,
+                            message_id=sent.message_id,
+                            caption=report_caption,
+                            reply_markup=mechanic_decision_keyboard(inspection_id),
+                        )
+                    except TelegramBadRequest:
+                        try:
+                            await self.bot.edit_message_reply_markup(
+                                chat_id=self.settings.mechanic_group_id,
+                                message_id=sent.message_id,
+                                reply_markup=mechanic_decision_keyboard(inspection_id),
+                            )
+                        except TelegramBadRequest:
+                            # Some Telegram clients/chats can reject keyboard editing for media group item.
+                            sent = await self.bot.send_message(
+                                chat_id=self.settings.mechanic_group_id,
+                                text="Примите решение кнопками ниже:",
+                                reply_markup=mechanic_decision_keyboard(inspection_id),
+                                reply_to_message_id=sent.message_id,
+                            )
+                except TelegramBadRequest:
+                    # Fallback when media group cannot be delivered.
+                    logger.exception(
+                        "Failed to send report media group for inspection #%s, fallback to text+separate photos",
+                        inspection_id,
+                    )
+                    sent = await self.bot.send_message(
+                        chat_id=self.settings.mechanic_group_id,
+                        text=report_caption,
+                        reply_markup=mechanic_decision_keyboard(inspection_id),
+                    )
+            elif len(required_photos_ordered) == 1:
+                _, first_path = required_photos_ordered[0]
+                sent = await self.bot.send_photo(
+                    chat_id=self.settings.mechanic_group_id,
+                    photo=FSInputFile(first_path),
+                    caption=report_caption,
+                    reply_markup=mechanic_decision_keyboard(inspection_id),
+                )
+                required_photos_sent_with_report = True
+            else:
+                sent = await self.bot.send_message(
+                    chat_id=self.settings.mechanic_group_id,
+                    text=report_caption,
+                    reply_markup=mechanic_decision_keyboard(inspection_id),
+                )
         except (TelegramBadRequest, TelegramForbiddenError):
             logger.exception(
                 "Failed to deliver inspection #%s to mechanic chat_id=%s",
@@ -2583,24 +2641,25 @@ class InspectionBot:
                             photo_path,
                         )
 
-        for photo_type, photo_path in required_photos_ordered:
-            try:
-                await self.bot.send_photo(
-                    chat_id=self.settings.mechanic_group_id,
-                    photo=FSInputFile(photo_path),
-                    caption=(
-                        "Обязательное фото к отчету: "
-                        f"{mechanic_labels.get(photo_type, photo_type)}"
-                    ),
-                    reply_to_message_id=sent.message_id,
-                )
-            except Exception:
-                photo_send_errors += 1
-                logger.exception(
-                    "Failed to send required photo for inspection #%s path=%s",
-                    inspection_id,
-                    photo_path,
-                )
+        if not required_photos_sent_with_report:
+            for photo_type, photo_path in required_photos_ordered:
+                try:
+                    await self.bot.send_photo(
+                        chat_id=self.settings.mechanic_group_id,
+                        photo=FSInputFile(photo_path),
+                        caption=(
+                            "Обязательное фото к отчету: "
+                            f"{mechanic_labels.get(photo_type, photo_type)}"
+                        ),
+                        reply_to_message_id=sent.message_id,
+                    )
+                except Exception:
+                    photo_send_errors += 1
+                    logger.exception(
+                        "Failed to send required photo for inspection #%s path=%s",
+                        inspection_id,
+                        photo_path,
+                    )
 
         self.db.complete_inspection(inspection_id)
         await self._export_report_to_google_sheets(summary)
