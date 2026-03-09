@@ -130,6 +130,10 @@ nano .env
 - `GOOGLE_SERVICE_ACCOUNT_JSON` — путь к service account JSON
 - `ADMIN_DASHBOARD_BASE_URL` — внешний URL админ-панели (например, `https://dashboard.company.ru`)
 
+Важно для Docker Compose: сервисный ключ должен лежать на сервере в `./credentials/google-service-account.json`.
+Этот каталог монтируется в контейнер как `/app/credentials`, поэтому значение
+`GOOGLE_SERVICE_ACCOUNT_JSON=credentials/google-service-account.json` оставляйте без изменений.
+
 Тогда в листе `Отчеты` появится колонка `Карточка отчета` с ссылкой `.../?inspection_id=<id>`.
 
 ### 5.4 Сборка и запуск

@@ -71,6 +71,11 @@ nano .env
 - `GOOGLE_SERVICE_ACCOUNT_JSON`
 - `ADMIN_DASHBOARD_BASE_URL`
 
+Если включаете Google Sheets, положите сервисный ключ в
+`./credentials/google-service-account.json` (рядом с `docker-compose.yml`).
+Для этого пути оставьте значение:
+`GOOGLE_SERVICE_ACCOUNT_JSON=credentials/google-service-account.json`.
+
 ## 5. Сборка и запуск
 
 Запуск всех сервисов (бот, админ-панель, backup):

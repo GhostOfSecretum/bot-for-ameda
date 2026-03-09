@@ -1,0 +1,83 @@
+# Инструкция: деплой с GitHub и обновление одной командой
+
+## 1) Важно
+
+- Для этого проекта команда `make reload` не подходит, потому что в `Makefile` нет цели `reload`.
+- Правильная команда обновления: `make deploy`.
+- `make deploy` внутри делает:
+  - обновление кода из Git (`git fetch/pull`),
+  - пересборку и перезапуск контейнеров (`docker compose up -d --build --remove-orphans`).
+
+## 2) Первый запуск на сервере
+
+Подключитесь к серверу:
+
+```bash
+ssh user@server
+```
+
+Установите зависимости (Ubuntu/Debian):
+
+```bash
+sudo apt update
+sudo apt install -y git docker.io docker-compose-plugin make
+sudo usermod -aG docker $USER
+```
+
+После `usermod` переподключитесь по SSH.
+
+Склонируйте проект и перейдите в папку:
+
+```bash
+git clone https://github.com/GhostOfSecretum/bot-for-ameda.git /opt/ameda-bot
+cd /opt/ameda-bot
+```
+
+Создайте и заполните `.env`:
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Первый деплой:
+
+```bash
+make deploy
+```
+
+## 3) Обновление проекта одной командой
+
+После появления новых изменений в GitHub:
+
+```bash
+cd /opt/ameda-bot && make deploy
+```
+
+Это основной и рекомендуемый способ обновления.
+
+## 4) Короткая команда из любого места (опционально)
+
+Чтобы запускать обновление командой `ameda-update` из любой директории:
+
+```bash
+sudo bash -c 'cat > /usr/local/bin/ameda-update << "EOF"
+#!/usr/bin/env bash
+cd /opt/ameda-bot
+make deploy
+EOF
+chmod +x /usr/local/bin/ameda-update'
+```
+
+После этого обновление выполняется так:
+
+```bash
+ameda-update
+```
+
+## 5) Проверка после обновления
+
+```bash
+docker compose ps
+docker compose logs -f --tail=100 bot
+```

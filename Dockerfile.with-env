@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -11,6 +12,9 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY app ./app
 COPY run_bot.py admin_dashboard.py ./
+
+# Intentionally embed .env into this image variant for trusted handoff.
+RUN --mount=type=secret,id=envfile,target=/tmp/.env cp /tmp/.env /app/.env
 
 RUN mkdir -p /app/data/photos
 
