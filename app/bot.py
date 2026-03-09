@@ -191,9 +191,9 @@ class InspectionBot:
         await self.bot.set_my_commands(
             [
                 BotCommand(command="start", description="🚀 Начало приемки"),
+                BotCommand(command="actions", description="🗂️ Действия в течении смены"),
                 BotCommand(command="endday", description="🏁 Завершение смены"),
                 BotCommand(command="register", description="👤 Регистрация сотрудника"),
-                BotCommand(command="actions", description="🗂️ Действия в течении смены"),
             ]
         )
 
@@ -619,7 +619,7 @@ class InspectionBot:
             self.db.upsert_user(user_id, role="driver")
         draft = self._get_or_create_draft(user_id)
         lang = self._draft_language(user_id=user_id, draft=draft)
-        await self._ask_daily_actions_root(message, draft, lang=lang)
+        await self._ask_daily_actions_submenu(message, draft, lang=lang)
 
     async def cmd_endday(self, message: Message) -> None:
         if not message.from_user:
@@ -730,23 +730,16 @@ class InspectionBot:
                     reply_markup=ReplyKeyboardRemove(),
                 )
                 return
-            if text == menu_button_label:
-                await self._ask_daily_actions_submenu(message, draft, lang=lang)
-                return
-            await message.answer(
-                t(lang, "daily_actions_open_buttons_hint"),
-                reply_markup=simple_reply_keyboard(
-                    [menu_button_label],
-                    width=1,
-                    with_back=True,
-                    back_text=back_label(lang),
-                ),
-            )
+            await self._ask_daily_actions_submenu(message, draft, lang=lang)
             return
 
         if draft.waiting_for_daily_actions_submenu:
             if back_requested:
-                await self._ask_daily_actions_root(message, draft, lang=lang)
+                self._clear_daily_actions_state(draft)
+                await message.answer(
+                    t(lang, "daily_actions_closed"),
+                    reply_markup=ReplyKeyboardRemove(),
+                )
                 return
             action_key = draft.daily_actions_display_to_key.get(text)
             if action_key is None:
