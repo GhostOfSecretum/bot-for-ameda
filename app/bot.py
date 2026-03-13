@@ -11,7 +11,7 @@ from typing import Any
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError
 from aiogram.filters import Command
 from aiogram.types import (
     BotCommand,
@@ -2233,12 +2233,14 @@ class InspectionBot:
                         chat_id=self.settings.mechanic_group_id,
                         media=media,
                         reply_to_message_id=linked_inspection_message_id,
+                        request_timeout=90,
                     )
-                except TelegramBadRequest:
+                except (TelegramBadRequest, TelegramNetworkError):
                     # If linked message is unavailable, still deliver report without reply linkage.
                     sent_album = await self.bot.send_media_group(
                         chat_id=self.settings.mechanic_group_id,
                         media=media,
+                        request_timeout=90,
                     )
                 sent_message = sent_album[0]
                 self.db.mark_daily_action_report_delivery(
@@ -2308,7 +2310,7 @@ class InspectionBot:
             export_report = self.db.get_daily_action_report(report_id)
             if export_report is not None:
                 await self._export_daily_action_report_to_google_sheets(dict(export_report))
-        except (TelegramBadRequest, TelegramForbiddenError):
+        except (TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError):
             logger.exception(
                 "Failed to deliver daily action report action=%s user_id=%s",
                 action_key,
@@ -2551,6 +2553,7 @@ class InspectionBot:
                     sent_album = await self.bot.send_media_group(
                         chat_id=self.settings.mechanic_group_id,
                         media=media,
+                        request_timeout=90,
                     )
                     sent = sent_album[0]
                     required_photos_sent_with_report = True
@@ -2576,7 +2579,7 @@ class InspectionBot:
                                 reply_markup=mechanic_decision_keyboard(inspection_id),
                                 reply_to_message_id=sent.message_id,
                             )
-                except TelegramBadRequest:
+                except (TelegramBadRequest, TelegramNetworkError):
                     # Fallback when media group cannot be delivered.
                     logger.exception(
                         "Failed to send report media group for inspection #%s, fallback to text+separate photos",
@@ -2602,7 +2605,7 @@ class InspectionBot:
                     text=report_caption,
                     reply_markup=mechanic_decision_keyboard(inspection_id),
                 )
-        except (TelegramBadRequest, TelegramForbiddenError):
+        except (TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError):
             logger.exception(
                 "Failed to deliver inspection #%s to mechanic chat_id=%s",
                 inspection_id,
