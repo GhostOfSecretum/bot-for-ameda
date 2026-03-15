@@ -61,16 +61,14 @@ PERSONAL_DATA_POLICY_URL = "https://telegra.ph/Politika-Personalnyh-Dannyh-03-06
 
 
 def _build_session() -> AiohttpSession:
-    session = AiohttpSession()
-    # Russian VPS providers often block Telegram over IPv4.
-    # Force IPv6 where available; fall back to IPv4 only on macOS
-    # (where LibreSSL can stall on IPv6 TLS handshake).
     import platform
 
+    session = AiohttpSession()
     if platform.system() == "Darwin":
+        # macOS + LibreSSL can stall on IPv6 TLS handshake with Telegram API.
         session._connector_init["family"] = socket.AF_INET
-    else:
-        session._connector_init["family"] = socket.AF_INET6
+    # On Linux (server) leave family unset so aiohttp uses Happy Eyeballs
+    # and picks whichever protocol actually works (IPv4 or IPv6).
     return session
 
 
