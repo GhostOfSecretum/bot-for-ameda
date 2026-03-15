@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import socket
 from dataclasses import dataclass, field
 from html import escape
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Any
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError
 from aiogram.filters import Command
@@ -56,6 +58,14 @@ from app.time_utils import now_compact_timestamp, now_iso
 
 logger = logging.getLogger(__name__)
 PERSONAL_DATA_POLICY_URL = "https://telegra.ph/Politika-Personalnyh-Dannyh-03-06-2"
+
+
+def _build_ipv4_session() -> AiohttpSession:
+    session = AiohttpSession()
+    # Some macOS + LibreSSL environments intermittently stall on IPv6 TLS handshake.
+    # Force IPv4 to keep Telegram API requests stable.
+    session._connector_init["family"] = socket.AF_INET
+    return session
 
 
 @dataclass
@@ -113,6 +123,7 @@ class InspectionBot:
         self.bot = Bot(
             token=self.settings.bot_token,
             default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+            session=_build_ipv4_session(),
         )
         self.dp = Dispatcher()
         self.router = Router()
