@@ -7,7 +7,11 @@ from aiogram import Bot
 
 class PhotoStorage:
     def __init__(self, photos_root: Path):
-        self.photos_root = photos_root
+        root = photos_root.expanduser()
+        if not root.is_absolute():
+            project_root = Path(__file__).resolve().parents[1]
+            root = project_root / root
+        self.photos_root = root.resolve()
         self.photos_root.mkdir(parents=True, exist_ok=True)
 
     async def save_telegram_photo(

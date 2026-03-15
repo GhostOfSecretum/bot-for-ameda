@@ -211,6 +211,24 @@ class InspectionBot:
             self.photo_locks[user_id] = lock
         return lock
 
+    def _resolve_stored_photo_path(self, stored_path: str) -> Path:
+        raw_path = Path(stored_path).expanduser()
+        if raw_path.is_absolute():
+            return raw_path
+
+        project_root = Path(__file__).resolve().parents[1]
+        photos_root = self.storage.photos_root
+        candidates = [
+            Path.cwd() / raw_path,
+            project_root / raw_path,
+            photos_root / raw_path,
+            photos_root.parent / raw_path,
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return (project_root / raw_path).resolve()
+
     def _cancel_required_photo_group_task(self, user_id: int) -> None:
         task = self.required_photo_group_tasks.pop(user_id, None)
         if task and not task.done():
@@ -2492,14 +2510,23 @@ class InspectionBot:
             geo_text = "не передана"
             geo_map_url = "-"
 
-        required_photo_map = {
-            photo_item["photo_type"]: Path(photo_item["file_path"])
-            for photo_item in summary["required_photos"]
-        }
+        required_photo_map: dict[str, Path] = {}
+        for photo_item in summary["required_photos"]:
+            photo_type = str(photo_item.get("photo_type") or "").strip()
+            file_path = str(photo_item.get("file_path") or "").strip()
+            if not photo_type or not file_path:
+                continue
+            resolved_path = self._resolve_stored_photo_path(file_path)
+            if resolved_path.exists():
+                required_photo_map[photo_type] = resolved_path
+
         required_photos_ordered: list[tuple[str, Path]] = []
         for photo_type, _ in REQUIRED_PHOTOS:
             photo_path = required_photo_map.get(photo_type)
-            if photo_path and photo_path.exists():
+            if photo_path:
+                required_photos_ordered.append((photo_type, photo_path))
+        for photo_type, photo_path in required_photo_map.items():
+            if photo_type not in {required_type for required_type, _ in REQUIRED_PHOTOS}:
                 required_photos_ordered.append((photo_type, photo_path))
 
         report_lines = [
@@ -2621,7 +2648,7 @@ class InspectionBot:
         photo_send_errors = 0
         for item in summary["items"]:
             if item.get("issue_photo_path"):
-                photo_path = Path(item["issue_photo_path"])
+                photo_path = self._resolve_stored_photo_path(str(item["issue_photo_path"]))
                 if photo_path.exists():
                     try:
                         await self.bot.send_photo(
