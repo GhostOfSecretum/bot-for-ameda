@@ -1,28 +1,15 @@
-networks:
-  botnet:
-    enable_ipv6: true
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.31.0.0/24
-        - subnet: fd12:3456:789a::/64
-
 services:
   bot:
     build: .
     container_name: ameda-bot
     restart: unless-stopped
+    network_mode: host
     env_file:
       - .env
     depends_on:
       - backup
     volumes:
       - ameda_data:/app/data
-    networks:
-      - botnet
-    dns:
-      - 8.8.8.8
-      - 2001:4860:4860::8888
     command: python run_bot.py
 
   dashboard:
@@ -35,8 +22,6 @@ services:
       - backup
     volumes:
       - ameda_data:/app/data
-    networks:
-      - botnet
     command: streamlit run admin_dashboard.py --server.address=0.0.0.0 --server.port=8501
     ports:
       - "8501:8501"
@@ -58,8 +43,6 @@ services:
       - ./backups:/backup
       - ./scripts/backup-once.sh:/usr/local/bin/backup-once.sh:ro
       - ./scripts/start-backup-cron.sh:/usr/local/bin/start-backup-cron.sh:ro
-    networks:
-      - botnet
     command: sh /usr/local/bin/start-backup-cron.sh
 
 volumes:
