@@ -126,23 +126,38 @@ class InspectionBot:
             self.db.upsert_user(telegram_id=sid, role="superadmin", full_name=None)
 
     def _register_handlers(self) -> None:
-        self.router.message.register(self.cmd_start, Command("start"))
-        self.router.message.register(self.cmd_endday, Command("endday"))
-        self.router.message.register(self.cmd_register, Command("register"))
-        self.router.message.register(self.cmd_actions, Command("actions"))
-        self.router.message.register(self.cmd_help, Command("help"))
-        self.router.message.register(self.cmd_role, Command("role"))
-        self.router.message.register(self.cmd_setrole, Command("setrole"))
-        self.router.message.register(self.on_text, F.text)
-        self.router.message.register(self.on_photo, F.photo)
-        self.router.message.register(self.on_location, F.location)
-        self.router.callback_query.register(self.on_language_selected, F.data.startswith("lang:"))
+        private_chat = F.chat.type == "private"
+
+        self.router.message.register(self.cmd_start, Command("start"), private_chat)
+        self.router.message.register(self.cmd_endday, Command("endday"), private_chat)
+        self.router.message.register(self.cmd_register, Command("register"), private_chat)
+        self.router.message.register(self.cmd_actions, Command("actions"), private_chat)
+        self.router.message.register(self.cmd_help, Command("help"), private_chat)
+        self.router.message.register(self.cmd_role, Command("role"), private_chat)
+        self.router.message.register(self.cmd_setrole, Command("setrole"), private_chat)
+        self.router.message.register(self.on_text, F.text, private_chat)
+        self.router.message.register(self.on_photo, F.photo, private_chat)
+        self.router.message.register(self.on_location, F.location, private_chat)
+        self.router.callback_query.register(
+            self.on_language_selected,
+            F.data.startswith("lang:"),
+            F.message.chat.type == "private",
+        )
         self.router.callback_query.register(
             self.on_registration_consent,
             F.data.startswith("regconsent:"),
+            F.message.chat.type == "private",
         )
-        self.router.callback_query.register(self.on_item_answer, F.data.startswith("item:"))
-        self.router.callback_query.register(self.on_required_photo_action, F.data.startswith("req_photo:"))
+        self.router.callback_query.register(
+            self.on_item_answer,
+            F.data.startswith("item:"),
+            F.message.chat.type == "private",
+        )
+        self.router.callback_query.register(
+            self.on_required_photo_action,
+            F.data.startswith("req_photo:"),
+            F.message.chat.type == "private",
+        )
         self.router.callback_query.register(self.on_mechanic_decision, F.data.startswith("mechanic:"))
         self.router.callback_query.register(
             self.on_daily_refuel_decision,
@@ -150,8 +165,13 @@ class InspectionBot:
         )
 
     async def run(self) -> None:
+        # Drop stale queued updates after restarts to avoid replaying old /start commands.
+        await self.bot.delete_webhook(drop_pending_updates=True)
         await self._configure_bot_commands()
-        await self.dp.start_polling(self.bot)
+        await self.dp.start_polling(
+            self.bot,
+            allowed_updates=self.dp.resolve_used_update_types(),
+        )
 
     async def _configure_bot_commands(self) -> None:
         await self.bot.set_my_commands(
