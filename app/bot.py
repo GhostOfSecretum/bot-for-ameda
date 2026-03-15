@@ -65,10 +65,10 @@ def _build_session() -> AiohttpSession:
 
     session = AiohttpSession()
     if platform.system() == "Darwin":
-        # macOS + LibreSSL can stall on IPv6 TLS handshake with Telegram API.
         session._connector_init["family"] = socket.AF_INET
-    # On Linux (server) leave family unset so aiohttp uses Happy Eyeballs
-    # and picks whichever protocol actually works (IPv4 or IPv6).
+    else:
+        # ISP blocks Telegram over IPv4; force IPv6.
+        session._connector_init["family"] = socket.AF_INET6
     return session
 
 
