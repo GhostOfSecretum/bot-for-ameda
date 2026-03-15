@@ -70,6 +70,7 @@ def _build_session(api_server: str | None = None) -> AiohttpSession:
         kwargs["api"] = TelegramAPIServer.from_base(api_server)
 
     session = AiohttpSession(**kwargs)
+    session.timeout = 20
     if not api_server and platform.system() == "Darwin":
         session._connector_init["family"] = socket.AF_INET
     return session
@@ -205,6 +206,7 @@ class InspectionBot:
         await self.dp.start_polling(
             self.bot,
             allowed_updates=self.dp.resolve_used_update_types(),
+            polling_timeout=15,
         )
 
     async def _configure_bot_commands(self) -> None:
@@ -2399,8 +2401,7 @@ class InspectionBot:
     async def _try_clear_inline_keyboard(self, callback: CallbackQuery) -> None:
         try:
             await callback.message.edit_reply_markup(reply_markup=None)
-        except (TelegramBadRequest, AttributeError):
-            # Message can already be edited or become unavailable; this is non-critical.
+        except (TelegramBadRequest, TelegramNetworkError, AttributeError):
             return
 
     async def _submit_inspection(self, message: Message, draft: InspectionDraft) -> None:
