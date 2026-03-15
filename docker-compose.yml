@@ -9,6 +9,9 @@ services:
       - backup
     volumes:
       - ameda_data:/app/data
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     command: python run_bot.py
 
   dashboard:
@@ -46,4 +49,4 @@ services:
 
 volumes:
   ameda_data:
-    name: ameda_data
+    external: true

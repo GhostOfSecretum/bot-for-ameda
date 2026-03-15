@@ -60,11 +60,17 @@ logger = logging.getLogger(__name__)
 PERSONAL_DATA_POLICY_URL = "https://telegra.ph/Politika-Personalnyh-Dannyh-03-06-2"
 
 
-def _build_ipv4_session() -> AiohttpSession:
-    session = AiohttpSession()
-    # Some macOS + LibreSSL environments intermittently stall on IPv6 TLS handshake.
-    # Force IPv4 to keep Telegram API requests stable.
-    session._connector_init["family"] = socket.AF_INET
+def _build_session() -> AiohttpSession:
+    import platform
+
+    from aiohttp import ClientTimeout
+
+    session = AiohttpSession(
+        timeout=ClientTimeout(total=30, connect=10, sock_connect=10, sock_read=20),
+    )
+    if platform.system() == "Darwin":
+        # macOS + LibreSSL can stall on IPv6 TLS handshake with Telegram API.
+        session._connector_init["family"] = socket.AF_INET
     return session
 
 
@@ -123,7 +129,7 @@ class InspectionBot:
         self.bot = Bot(
             token=self.settings.bot_token,
             default=DefaultBotProperties(parse_mode=ParseMode.HTML),
-            session=_build_ipv4_session(),
+            session=_build_session(),
         )
         self.dp = Dispatcher()
         self.router = Router()
