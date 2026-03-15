@@ -140,6 +140,7 @@ class InspectionBot:
         self.photo_locks: dict[int, asyncio.Lock] = {}
         self.required_photo_group_tasks: dict[int, asyncio.Task[None]] = {}
         self._register_handlers()
+        self._install_retry_middleware()
 
         for sid in self.settings.superadmin_ids:
             self.db.upsert_user(telegram_id=sid, role="superadmin", full_name=None)
@@ -183,6 +184,29 @@ class InspectionBot:
             F.data.startswith("dailyfuel:"),
         )
 
+    def _install_retry_middleware(self) -> None:
+        from aiogram import BaseMiddleware
+        from aiogram.types import TelegramObject
+
+        bot_ref = self.bot
+
+        class RetryOnNetworkError(BaseMiddleware):
+            async def __call__(self, handler, event: TelegramObject, data: dict) -> Any:
+                for attempt in range(3):
+                    try:
+                        return await handler(event, data)
+                    except TelegramNetworkError:
+                        if attempt == 2:
+                            logger.warning("Handler failed after 3 retries due to network error")
+                            return None
+                        logger.info("Network error in handler, retry %d/3…", attempt + 2)
+                        await asyncio.sleep(0.5)
+                return None
+
+        middleware = RetryOnNetworkError()
+        self.dp.message.middleware(middleware)
+        self.dp.callback_query.middleware(middleware)
+
     async def run(self) -> None:
         for attempt in range(1, 6):
             try:
@@ -206,7 +230,7 @@ class InspectionBot:
         await self.dp.start_polling(
             self.bot,
             allowed_updates=self.dp.resolve_used_update_types(),
-            polling_timeout=15,
+            polling_timeout=10,
         )
 
     async def _configure_bot_commands(self) -> None:
