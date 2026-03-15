@@ -25,10 +25,6 @@ docker images | rg ameda-bot
 
 Важно: `.env` не должен попадать в Git и в архив образа.
 
-Если нужен экспорт в Google Sheets:
-- положите ключ в `./credentials/google-service-account.json`
-- в `.env` укажите `GOOGLE_SERVICE_ACCOUNT_JSON=credentials/google-service-account.json`
-
 ## 3) Запуск бота
 
 ```bash
@@ -38,7 +34,6 @@ docker run -d \
   --restart unless-stopped \
   --env-file .env \
   -v ameda_data:/app/data \
-  -v "$(pwd)/credentials:/app/credentials:ro" \
   ameda-bot:it-transfer-20260307 \
   python run_bot.py
 ```
@@ -61,7 +56,6 @@ docker run -d \
   --restart unless-stopped \
   --env-file .env \
   -v ameda_data:/app/data \
-  -v "$(pwd)/credentials:/app/credentials:ro" \
   ameda-bot:it-transfer-NEW \
   python run_bot.py
 ```

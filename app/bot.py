@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from dataclasses import dataclass, field
 from html import escape
 from pathlib import Path
@@ -53,11 +52,6 @@ from app.keyboards import (
 )
 from app.storage import PhotoStorage
 from app.time_utils import now_compact_timestamp, now_iso
-
-try:
-    from app.sheets_reporting import GoogleSheetsReporter
-except Exception:  # pragma: no cover - optional dependency path
-    GoogleSheetsReporter = None  # type: ignore[assignment,misc]
 
 
 logger = logging.getLogger(__name__)
@@ -116,8 +110,6 @@ class InspectionBot:
         self.settings = load_settings()
         self.db = Database(self.settings.database_path)
         self.storage = PhotoStorage(self.settings.photos_dir)
-        self.sheets_reporter: GoogleSheetsReporter | None = None
-        self._last_sheets_init_attempt: float = 0.0
         self.bot = Bot(
             token=self.settings.bot_token,
             default=DefaultBotProperties(parse_mode=ParseMode.HTML),
@@ -132,32 +124,6 @@ class InspectionBot:
 
         for sid in self.settings.superadmin_ids:
             self.db.upsert_user(telegram_id=sid, role="superadmin", full_name=None)
-
-        spreadsheet_id = self.settings.reports_spreadsheet_id
-        credentials_path = self.settings.google_service_account_json
-        if spreadsheet_id and credentials_path:
-            if GoogleSheetsReporter is None:
-                logger.warning(
-                    "Google Sheets export disabled: optional dependencies are not installed."
-                )
-                return
-            if not credentials_path.exists():
-                logger.warning(
-                    "Google Sheets export disabled: credentials file does not exist: %s",
-                    credentials_path,
-                )
-            else:
-                try:
-                    self.sheets_reporter = GoogleSheetsReporter(
-                        spreadsheet_id=spreadsheet_id,
-                        credentials_path=credentials_path,
-                        admin_dashboard_base_url=self.settings.admin_dashboard_base_url,
-                    )
-                    logger.info("Google Sheets export enabled for spreadsheet_id=%s", spreadsheet_id)
-                except Exception:
-                    logger.exception(
-                        "Failed to initialize Google Sheets reporter. Export is disabled."
-                    )
 
     def _register_handlers(self) -> None:
         self.router.message.register(self.cmd_start, Command("start"))
@@ -233,92 +199,6 @@ class InspectionBot:
         task = self.required_photo_group_tasks.pop(user_id, None)
         if task and not task.done():
             task.cancel()
-
-    def _try_init_sheets_reporter(self) -> bool:
-        if self.sheets_reporter is not None:
-            return True
-        if GoogleSheetsReporter is None:
-            return False
-
-        spreadsheet_id = self.settings.reports_spreadsheet_id
-        credentials_path = self.settings.google_service_account_json
-        if not spreadsheet_id or not credentials_path:
-            return False
-        if not credentials_path.exists():
-            return False
-
-        # Avoid noisy reconnect attempts on every message during temporary network issues.
-        now = time.monotonic()
-        if now - self._last_sheets_init_attempt < 60:
-            return False
-        self._last_sheets_init_attempt = now
-
-        try:
-            self.sheets_reporter = GoogleSheetsReporter(
-                spreadsheet_id=spreadsheet_id,
-                credentials_path=credentials_path,
-                admin_dashboard_base_url=self.settings.admin_dashboard_base_url,
-            )
-            logger.info("Google Sheets reporter initialized successfully on retry")
-            return True
-        except Exception:
-            logger.exception("Google Sheets reporter init retry failed")
-            return False
-
-    async def _export_report_to_google_sheets(self, summary: dict[str, Any]) -> None:
-        if self.sheets_reporter is None and not self._try_init_sheets_reporter():
-            return
-        inspection_id = summary.get("inspection", {}).get("id")
-        try:
-            await asyncio.to_thread(self.sheets_reporter.append_report, summary)
-        except Exception:
-            logger.exception(
-                "Failed to export inspection #%s to Google Sheets",
-                inspection_id,
-            )
-
-    async def _export_end_workday_report_to_google_sheets(
-        self,
-        report: dict[str, Any],
-        *,
-        end_workday_location: tuple[float, float] | None,
-        required_photo_count: int,
-        total_photo_count: int,
-    ) -> None:
-        if self.sheets_reporter is None and not self._try_init_sheets_reporter():
-            return
-        report_id = report.get("id")
-        summary = {
-            "report": report,
-            "location": end_workday_location,
-            "required_photo_count": required_photo_count,
-            "total_photo_count": total_photo_count,
-        }
-        try:
-            await asyncio.to_thread(self.sheets_reporter.append_end_workday_report, summary)
-        except Exception:
-            logger.exception(
-                "Failed to export end-workday report #%s to Google Sheets",
-                report_id,
-            )
-
-    async def _export_daily_action_report_to_google_sheets(
-        self,
-        report: dict[str, Any],
-    ) -> None:
-        if self.sheets_reporter is None and not self._try_init_sheets_reporter():
-            return
-        report_id = report.get("id")
-        action_key = report.get("action_key")
-        if action_key == "end_workday":
-            return
-        try:
-            await asyncio.to_thread(self.sheets_reporter.append_daily_action_report, report)
-        except Exception:
-            logger.exception(
-                "Failed to export daily action report #%s to Google Sheets",
-                report_id,
-            )
 
     async def _notify_missing_required_photos_delayed(self, user_id: int, chat_id: int) -> None:
         try:
@@ -2226,14 +2106,6 @@ class InspectionBot:
                         len(endday_paths),
                     )
                     self.db.mark_daily_action_report_delivery(report_id, status="failed")
-                    export_report = self.db.get_daily_action_report(report_id)
-                    if export_report is not None:
-                        await self._export_end_workday_report_to_google_sheets(
-                            dict(export_report),
-                            end_workday_location=end_workday_location,
-                            required_photo_count=len(end_workday_photo_paths),
-                            total_photo_count=len(endday_paths),
-                        )
                     await message.answer(t(lang, "daily_report_delivery_failed"))
                     return
 
@@ -2266,14 +2138,6 @@ class InspectionBot:
                     status="sent",
                     mechanic_message_id=sent_message.message_id,
                 )
-                export_report = self.db.get_daily_action_report(report_id)
-                if export_report is not None:
-                    await self._export_end_workday_report_to_google_sheets(
-                        dict(export_report),
-                        end_workday_location=end_workday_location,
-                        required_photo_count=len(end_workday_photo_paths),
-                        total_photo_count=len(endday_paths),
-                    )
                 self.db.add_audit(
                     actor_telegram_id=draft.driver_tg_id,
                     action=f"daily_report_sent_{action_key}",
@@ -2325,9 +2189,6 @@ class InspectionBot:
                 status="sent",
                 mechanic_message_id=sent_message.message_id,
             )
-            export_report = self.db.get_daily_action_report(report_id)
-            if export_report is not None:
-                await self._export_daily_action_report_to_google_sheets(dict(export_report))
         except (TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError):
             logger.exception(
                 "Failed to deliver daily action report action=%s user_id=%s",
@@ -2335,9 +2196,6 @@ class InspectionBot:
                 draft.driver_tg_id,
             )
             self.db.mark_daily_action_report_delivery(report_id, status="failed")
-            export_report = self.db.get_daily_action_report(report_id)
-            if export_report is not None:
-                await self._export_daily_action_report_to_google_sheets(dict(export_report))
             await message.answer(t(lang, "daily_report_delivery_failed"))
             return
 
@@ -2685,7 +2543,6 @@ class InspectionBot:
                     )
 
         self.db.complete_inspection(inspection_id)
-        await self._export_report_to_google_sheets(summary)
 
         if photo_send_errors:
             await message.answer(
