@@ -61,12 +61,10 @@ PERSONAL_DATA_POLICY_URL = "https://telegra.ph/Politika-Personalnyh-Dannyh-03-06
 
 
 def _build_session() -> AiohttpSession:
-    import platform
-
     session = AiohttpSession()
-    if platform.system() == "Darwin":
-        # macOS + LibreSSL can stall on IPv6 TLS handshake with Telegram API.
-        session._connector_init["family"] = socket.AF_INET
+    # Force IPv4: aiohttp tries IPv6 first and hangs on many VPS / Docker setups
+    # where IPv6 routes exist but don't actually work for TLS to api.telegram.org.
+    session._connector_init["family"] = socket.AF_INET
     return session
 
 
