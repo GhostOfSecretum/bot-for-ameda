@@ -63,11 +63,7 @@ PERSONAL_DATA_POLICY_URL = "https://telegra.ph/Politika-Personalnyh-Dannyh-03-06
 def _build_session() -> AiohttpSession:
     import platform
 
-    from aiohttp import ClientTimeout
-
-    session = AiohttpSession(
-        timeout=ClientTimeout(total=30, connect=10, sock_connect=10, sock_read=20),
-    )
+    session = AiohttpSession()
     if platform.system() == "Darwin":
         # macOS + LibreSSL can stall on IPv6 TLS handshake with Telegram API.
         session._connector_init["family"] = socket.AF_INET
@@ -182,9 +178,25 @@ class InspectionBot:
         )
 
     async def run(self) -> None:
-        # Drop stale queued updates after restarts to avoid replaying old /start commands.
-        await self.bot.delete_webhook(drop_pending_updates=True)
-        await self._configure_bot_commands()
+        for attempt in range(1, 6):
+            try:
+                await self.bot.delete_webhook(drop_pending_updates=True)
+                break
+            except TelegramNetworkError:
+                delay = min(attempt * 5, 30)
+                logger.warning(
+                    "delete_webhook failed (attempt %d/5), retrying in %ds…",
+                    attempt, delay,
+                )
+                await asyncio.sleep(delay)
+        else:
+            logger.error("Could not reach Telegram API after 5 attempts, starting polling anyway")
+
+        try:
+            await self._configure_bot_commands()
+        except TelegramNetworkError:
+            logger.warning("Failed to set bot commands, will retry on next restart")
+
         await self.dp.start_polling(
             self.bot,
             allowed_updates=self.dp.resolve_used_update_types(),
