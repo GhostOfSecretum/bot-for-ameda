@@ -3,17 +3,13 @@ services:
     build: .
     container_name: ameda-bot
     restart: unless-stopped
+    network_mode: host
     env_file:
       - .env
     depends_on:
       - backup
     volumes:
       - ameda_data:/app/data
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=1
     command: python run_bot.py
 
   dashboard:
