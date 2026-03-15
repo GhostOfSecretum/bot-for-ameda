@@ -60,15 +60,18 @@ logger = logging.getLogger(__name__)
 PERSONAL_DATA_POLICY_URL = "https://telegra.ph/Politika-Personalnyh-Dannyh-03-06-2"
 
 
-def _build_session() -> AiohttpSession:
+def _build_session(api_server: str | None = None) -> AiohttpSession:
     import platform
 
-    session = AiohttpSession()
-    if platform.system() == "Darwin":
+    from aiogram.client.telegram import TelegramAPIServer
+
+    kwargs: dict[str, Any] = {}
+    if api_server:
+        kwargs["api"] = TelegramAPIServer.from_base(api_server)
+
+    session = AiohttpSession(**kwargs)
+    if not api_server and platform.system() == "Darwin":
         session._connector_init["family"] = socket.AF_INET
-    else:
-        # ISP blocks Telegram over IPv4; force IPv6.
-        session._connector_init["family"] = socket.AF_INET6
     return session
 
 
@@ -127,7 +130,7 @@ class InspectionBot:
         self.bot = Bot(
             token=self.settings.bot_token,
             default=DefaultBotProperties(parse_mode=ParseMode.HTML),
-            session=_build_session(),
+            session=_build_session(self.settings.telegram_api_server),
         )
         self.dp = Dispatcher()
         self.router = Router()

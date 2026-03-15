@@ -16,6 +16,7 @@ class Settings:
     database_path: Path
     photos_dir: Path
     admin_dashboard_password: str
+    telegram_api_server: str | None = None
 
 
 def _parse_int_list(value: str) -> list[int]:
@@ -34,6 +35,7 @@ def load_settings() -> Settings:
     database_path = Path(os.getenv("DATABASE_PATH", "data/inspection.db"))
     photos_dir = Path(os.getenv("PHOTOS_DIR", "data/photos"))
     admin_dashboard_password = os.getenv("ADMIN_DASHBOARD_PASSWORD", "change_me")
+    telegram_api_server = os.getenv("TELEGRAM_API_SERVER", "").strip() or None
 
     if not bot_token:
         raise ValueError("BOT_TOKEN is required in .env")
@@ -53,4 +55,5 @@ def load_settings() -> Settings:
         database_path=database_path,
         photos_dir=photos_dir,
         admin_dashboard_password=admin_dashboard_password,
+        telegram_api_server=telegram_api_server,
     )
