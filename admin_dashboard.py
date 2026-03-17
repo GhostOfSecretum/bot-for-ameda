@@ -51,6 +51,14 @@ def _required_photo_caption(photo_type: str) -> str:
     return REQUIRED_PHOTO_LABELS_RU.get(normalized, photo_type)
 
 
+def _daily_action_photo_caption(photo_type: str | None) -> str:
+    if not photo_type:
+        return "Фото к действию"
+    if photo_type == "fuel":
+        return "Уровень топлива"
+    return _required_photo_caption(photo_type)
+
+
 def _render_inspection_details(inspection_id: int) -> None:
     try:
         details = db.get_inspection_details_for_dashboard(inspection_id)
@@ -184,5 +192,23 @@ if st.button("Показать действие", key="show_daily_action"):
         st.write(f"**Комментарий:** {action['comment'] or '—'}")
         st.write(f"**Дата:** {action['created_at']}")
         st.write(f"**Статус доставки:** {action['delivery_status']}")
-        if action["photo_path"] and Path(action["photo_path"]).exists():
-            st.image(action["photo_path"], caption="Фото к действию", width=320)
+        action_images: list[dict[str, str]] = []
+        for photo in db.get_daily_action_report_photos(int(action["id"])):
+            path = Path(str(photo["file_path"]))
+            if path.exists():
+                action_images.append(
+                    {
+                        "path": str(path),
+                        "caption": _daily_action_photo_caption(photo["photo_type"]),
+                    }
+                )
+        if not action_images and action["photo_path"] and Path(action["photo_path"]).exists():
+            action_images.append(
+                {
+                    "path": action["photo_path"],
+                    "caption": "Фото к действию",
+                }
+            )
+        if action_images:
+            st.markdown("#### Фото к действию")
+            _render_images_in_single_row(action_images)

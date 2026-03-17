@@ -2107,6 +2107,22 @@ class InspectionBot:
             photo_path=photo_path,
             linked_inspection_id=linked_inspection_id,
         )
+        if action_key == "end_workday":
+            if photo_path:
+                self.db.add_daily_action_report_photo(
+                    report_id,
+                    file_path=photo_path,
+                    photo_type="fuel",
+                    photo_order=0,
+                )
+            for index, stored_path in enumerate(end_workday_photo_paths or [], start=1):
+                photo_type = REQUIRED_PHOTOS[index - 1][0] if index - 1 < len(REQUIRED_PHOTOS) else None
+                self.db.add_daily_action_report_photo(
+                    report_id,
+                    file_path=stored_path,
+                    photo_type=photo_type,
+                    photo_order=index,
+                )
         report_reference = (
             f"#{linked_inspection_id}" if linked_inspection_id is not None else "—"
         )

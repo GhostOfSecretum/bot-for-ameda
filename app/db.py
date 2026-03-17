@@ -118,6 +118,15 @@ class Database:
                     fuel_decision_at TEXT,
                     FOREIGN KEY(driver_telegram_id) REFERENCES users(telegram_id)
                 );
+
+                CREATE TABLE IF NOT EXISTS daily_action_report_photos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    report_id INTEGER NOT NULL,
+                    photo_type TEXT,
+                    file_path TEXT NOT NULL,
+                    photo_order INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY(report_id) REFERENCES daily_action_reports(id) ON DELETE CASCADE
+                );
                 """
             )
 
@@ -591,6 +600,28 @@ class Database:
             )
             return int(cur.lastrowid)
 
+    def add_daily_action_report_photo(
+        self,
+        report_id: int,
+        *,
+        file_path: str,
+        photo_type: str | None = None,
+        photo_order: int = 0,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO daily_action_report_photos (
+                    report_id,
+                    photo_type,
+                    file_path,
+                    photo_order
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (report_id, photo_type, file_path, photo_order),
+            )
+
     def mark_daily_action_report_delivery(
         self,
         report_id: int,
@@ -632,6 +663,18 @@ class Database:
                 """,
                 (report_id,),
             ).fetchone()
+
+    def get_daily_action_report_photos(self, report_id: int) -> list[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                """
+                SELECT photo_type, file_path, photo_order
+                FROM daily_action_report_photos
+                WHERE report_id = ?
+                ORDER BY photo_order ASC, id ASC
+                """,
+                (report_id,),
+            ).fetchall()
 
     def set_daily_action_fuel_decision(
         self,
