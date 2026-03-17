@@ -828,11 +828,11 @@ class InspectionBot:
             refuel_no = t(lang, "daily_end_workday_refuel_no_button")
             if text == refuel_yes:
                 draft.daily_action_status_key = "yes"
-                await self._ask_daily_end_workday_fuel_photo(message, draft, lang=lang)
+                await self._ask_daily_end_workday_photos(message, draft, lang=lang)
                 return
             if text == refuel_no:
                 draft.daily_action_status_key = "no"
-                await self._ask_daily_end_workday_fuel_photo(message, draft, lang=lang)
+                await self._ask_daily_end_workday_photos(message, draft, lang=lang)
                 return
             await message.answer(
                 t(lang, "daily_end_workday_refuel_buttons_hint"),
@@ -862,7 +862,7 @@ class InspectionBot:
 
         if draft.waiting_for_daily_end_workday_photos:
             if back_requested:
-                await self._ask_daily_end_workday_fuel_photo(message, draft, lang=lang)
+                await self._ask_daily_end_workday_refuel(message, draft, lang=lang)
                 return
             await message.answer(
                 t(lang, "daily_end_workday_photo_waiting"),
@@ -2030,9 +2030,6 @@ class InspectionBot:
                 return
             if end_workday_fuel_photo_path is None:
                 end_workday_fuel_photo_path = draft.daily_end_workday_fuel_photo_path
-            if not end_workday_fuel_photo_path:
-                await self._ask_daily_end_workday_fuel_photo(message, draft, lang=lang)
-                return
             if end_workday_photo_paths is None:
                 end_workday_photo_paths = [
                     draft.daily_end_workday_required_photos[key]
@@ -2188,10 +2185,13 @@ class InspectionBot:
                 report_caption = report_text.replace("<b>", "").replace("</b>", "")
                 if len(report_caption) > 1024:
                     report_caption = report_caption[:1019].rstrip() + "\n…"
-                endday_paths = [Path(end_workday_fuel_photo_path)] + [
-                    Path(path) for path in end_workday_photo_paths
-                ]
-                expected_endday_photos = len(REQUIRED_PHOTOS) + 1
+                endday_paths = []
+                if end_workday_fuel_photo_path:
+                    endday_paths.append(Path(end_workday_fuel_photo_path))
+                endday_paths.extend(Path(path) for path in end_workday_photo_paths)
+                expected_endday_photos = len(REQUIRED_PHOTOS) + (
+                    1 if end_workday_fuel_photo_path else 0
+                )
                 if len(endday_paths) < expected_endday_photos or any(
                     not photo_path.exists() for photo_path in endday_paths
                 ):
