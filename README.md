@@ -201,10 +201,11 @@ make restore FILE=backups/ameda_data_YYYYMMDD_HHMMSS.tar.gz
 
 ### 5.8 Если раньше использовали `./data:/app/data`
 
-Если у вас уже были данные в папке `./data`, разово перенесите их в новый volume:
+На чистом сервере `ameda_data` создается автоматически при первом `docker compose up -d --build`.
+
+Если у вас уже были данные в папке `./data`, разово перенесите их в volume:
 
 ```bash
-docker volume create ameda_data
 docker run --rm -v ameda_data:/to -v "$(pwd)/data:/from:ro" alpine:3.20 sh -c "cp -a /from/. /to/"
 ```
 

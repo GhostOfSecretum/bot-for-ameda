@@ -46,4 +46,4 @@ services:
 
 volumes:
   ameda_data:
-    external: true
+    name: ameda_data

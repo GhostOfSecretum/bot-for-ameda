@@ -1549,7 +1549,11 @@ class InspectionBot:
 
         _, inspection_id_str, decision = parts
         inspection_id = int(inspection_id_str)
-        if not user or user["role"] not in MECHANIC_ROLES:
+        is_in_mechanic_group = (
+            callback.message.chat.id == self.settings.mechanic_group_id
+        )
+        has_mechanic_role = user and user["role"] in MECHANIC_ROLES
+        if not is_in_mechanic_group and not has_mechanic_role:
             await callback.answer(t(lang, "mechanic_only"), show_alert=True)
             return
 
@@ -1599,7 +1603,11 @@ class InspectionBot:
             return
         user = self.db.get_user(callback.from_user.id)
         lang = self._user_language(user)
-        if not user or user["role"] not in MECHANIC_ROLES:
+        is_in_mechanic_group = (
+            callback.message.chat.id == self.settings.mechanic_group_id
+        )
+        has_mechanic_role = user and user["role"] in MECHANIC_ROLES
+        if not is_in_mechanic_group and not has_mechanic_role:
             await callback.answer(t(lang, "mechanic_only"), show_alert=True)
             return
 
