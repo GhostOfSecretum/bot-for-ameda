@@ -310,6 +310,259 @@ class Database:
                 (equipment_type, brand),
             ).fetchall()
 
+    def list_equipment_catalog(self) -> list[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                """
+                SELECT type, brand, reg_number, is_active
+                FROM equipment
+                ORDER BY type ASC, brand ASC, reg_number ASC
+                """
+            ).fetchall()
+
+    def list_equipment_catalog_for_dashboard(self) -> list[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                """
+                SELECT
+                    e.id,
+                    e.type,
+                    e.brand,
+                    e.reg_number,
+                    e.is_active,
+                    COALESCE(stats.inspections_count, 0) AS inspections_count,
+                    stats.last_inspection_at
+                FROM equipment e
+                LEFT JOIN (
+                    SELECT
+                        equipment_id,
+                        COUNT(*) AS inspections_count,
+                        MAX(started_at) AS last_inspection_at
+                    FROM inspections
+                    GROUP BY equipment_id
+                ) stats ON stats.equipment_id = e.id
+                ORDER BY e.type ASC, e.brand ASC, e.reg_number ASC
+                """
+            ).fetchall()
+
+    def get_equipment_inspection_history_for_dashboard(self, equipment_id: int) -> list[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                """
+                SELECT
+                    i.id,
+                    i.started_at,
+                    i.completed_at,
+                    i.status,
+                    i.mechanic_decision,
+                    i.driver_full_name,
+                    i.driver_phone,
+                    COALESCE(items.ok_count, 0) AS ok_count,
+                    COALESCE(items.nok_count, 0) AS nok_count
+                FROM inspections i
+                LEFT JOIN (
+                    SELECT
+                        inspection_id,
+                        SUM(CASE WHEN is_ok = 1 THEN 1 ELSE 0 END) AS ok_count,
+                        SUM(CASE WHEN is_ok = 0 THEN 1 ELSE 0 END) AS nok_count
+                    FROM inspection_items
+                    GROUP BY inspection_id
+                ) items ON items.inspection_id = i.id
+                WHERE i.equipment_id = ?
+                ORDER BY i.id DESC
+                """,
+                (equipment_id,),
+            ).fetchall()
+
+    def get_equipment_repairs_for_dashboard(self, equipment_id: int) -> list[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                """
+                SELECT
+                    i.id,
+                    i.started_at,
+                    i.mechanic_decision_at,
+                    i.driver_full_name,
+                    i.mechanic_comment,
+                    COALESCE(items.nok_count, 0) AS nok_count
+                FROM inspections i
+                LEFT JOIN (
+                    SELECT
+                        inspection_id,
+                        SUM(CASE WHEN is_ok = 0 THEN 1 ELSE 0 END) AS nok_count
+                    FROM inspection_items
+                    GROUP BY inspection_id
+                ) items ON items.inspection_id = i.id
+                WHERE i.equipment_id = ?
+                  AND i.mechanic_decision = 'repair'
+                ORDER BY COALESCE(i.mechanic_decision_at, i.started_at) DESC, i.id DESC
+                """,
+                (equipment_id,),
+            ).fetchall()
+
+    def get_equipment_drivers_for_dashboard(self, equipment_id: int) -> list[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                """
+                SELECT
+                    i.driver_telegram_id,
+                    i.driver_full_name,
+                    COUNT(i.id) AS inspections_count,
+                    MIN(i.started_at) AS first_drive_at,
+                    MAX(i.started_at) AS last_drive_at
+                FROM inspections i
+                WHERE i.equipment_id = ?
+                GROUP BY i.driver_telegram_id, i.driver_full_name
+                ORDER BY last_drive_at DESC, inspections_count DESC
+                """,
+                (equipment_id,),
+            ).fetchall()
+
+    def list_drivers_for_dashboard(self) -> list[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                """
+                WITH inspection_stats AS (
+                    SELECT
+                        i.driver_telegram_id,
+                        MAX(i.driver_full_name) AS fallback_name,
+                        COUNT(DISTINCT i.id) AS shifts_count,
+                        COALESCE(SUM(CASE WHEN items.is_ok = 0 THEN 1 ELSE 0 END), 0) AS issues_count,
+                        COALESCE(SUM(CASE WHEN items.is_ok = 1 THEN 1 ELSE 0 END), 0) AS ok_count,
+                        COALESCE(COUNT(items.id), 0) AS total_items_count,
+                        MAX(i.started_at) AS last_shift_at
+                    FROM inspections i
+                    LEFT JOIN inspection_items items ON items.inspection_id = i.id
+                    GROUP BY i.driver_telegram_id
+                )
+                SELECT
+                    u.telegram_id AS driver_telegram_id,
+                    COALESCE(NULLIF(TRIM(u.full_name), ''), s.fallback_name, 'ID ' || u.telegram_id) AS driver_full_name,
+                    u.phone AS driver_phone,
+                    COALESCE(s.shifts_count, 0) AS shifts_count,
+                    COALESCE(s.issues_count, 0) AS issues_count,
+                    COALESCE(s.ok_count, 0) AS ok_count,
+                    COALESCE(s.total_items_count, 0) AS total_items_count,
+                    s.last_shift_at
+                FROM users u
+                LEFT JOIN inspection_stats s ON s.driver_telegram_id = u.telegram_id
+                WHERE u.is_active = 1
+                  AND u.role = 'driver'
+
+                UNION
+
+                SELECT
+                    s.driver_telegram_id AS driver_telegram_id,
+                    COALESCE(NULLIF(TRIM(s.fallback_name), ''), 'ID ' || s.driver_telegram_id) AS driver_full_name,
+                    NULL AS driver_phone,
+                    COALESCE(s.shifts_count, 0) AS shifts_count,
+                    COALESCE(s.issues_count, 0) AS issues_count,
+                    COALESCE(s.ok_count, 0) AS ok_count,
+                    COALESCE(s.total_items_count, 0) AS total_items_count,
+                    s.last_shift_at
+                FROM inspection_stats s
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM users u2
+                    WHERE u2.telegram_id = s.driver_telegram_id
+                      AND u2.is_active = 1
+                      AND u2.role = 'driver'
+                )
+                ORDER BY driver_full_name COLLATE NOCASE ASC
+                """
+            ).fetchall()
+
+    def get_driver_dashboard_summary(self, driver_telegram_id: int) -> sqlite3.Row | None:
+        with self._connect() as conn:
+            return conn.execute(
+                """
+                WITH inspection_stats AS (
+                    SELECT
+                        i.driver_telegram_id,
+                        MAX(i.driver_full_name) AS fallback_name,
+                        COUNT(DISTINCT i.id) AS shifts_count,
+                        COALESCE(SUM(CASE WHEN items.is_ok = 0 THEN 1 ELSE 0 END), 0) AS issues_count,
+                        COALESCE(SUM(CASE WHEN items.is_ok = 1 THEN 1 ELSE 0 END), 0) AS ok_count,
+                        COALESCE(COUNT(items.id), 0) AS total_items_count,
+                        MAX(i.started_at) AS last_shift_at
+                    FROM inspections i
+                    LEFT JOIN inspection_items items ON items.inspection_id = i.id
+                    WHERE i.driver_telegram_id = ?
+                    GROUP BY i.driver_telegram_id
+                )
+                SELECT
+                    COALESCE(u.telegram_id, s.driver_telegram_id) AS driver_telegram_id,
+                    COALESCE(
+                        NULLIF(TRIM(u.full_name), ''),
+                        NULLIF(TRIM(s.fallback_name), ''),
+                        'ID ' || COALESCE(u.telegram_id, s.driver_telegram_id)
+                    ) AS driver_full_name,
+                    u.phone AS driver_phone,
+                    COALESCE(s.shifts_count, 0) AS shifts_count,
+                    COALESCE(s.issues_count, 0) AS issues_count,
+                    COALESCE(s.ok_count, 0) AS ok_count,
+                    COALESCE(s.total_items_count, 0) AS total_items_count,
+                    s.last_shift_at
+                FROM inspection_stats s
+                LEFT JOIN users u
+                    ON u.telegram_id = s.driver_telegram_id
+                   AND u.is_active = 1
+                   AND u.role = 'driver'
+                WHERE s.driver_telegram_id = ?
+                UNION
+                SELECT
+                    u.telegram_id AS driver_telegram_id,
+                    COALESCE(NULLIF(TRIM(u.full_name), ''), 'ID ' || u.telegram_id) AS driver_full_name,
+                    u.phone AS driver_phone,
+                    0 AS shifts_count,
+                    0 AS issues_count,
+                    0 AS ok_count,
+                    0 AS total_items_count,
+                    NULL AS last_shift_at
+                FROM users u
+                WHERE u.telegram_id = ?
+                  AND u.is_active = 1
+                  AND u.role = 'driver'
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM inspection_stats s2
+                      WHERE s2.driver_telegram_id = u.telegram_id
+                  )
+                LIMIT 1
+                """,
+                (driver_telegram_id, driver_telegram_id, driver_telegram_id),
+            ).fetchone()
+
+    def get_driver_inspections_for_dashboard(self, driver_telegram_id: int) -> list[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                """
+                SELECT
+                    i.id,
+                    i.started_at,
+                    i.status,
+                    i.mechanic_decision,
+                    e.type,
+                    e.brand,
+                    e.reg_number,
+                    COALESCE(items.ok_count, 0) AS ok_count,
+                    COALESCE(items.nok_count, 0) AS nok_count
+                FROM inspections i
+                LEFT JOIN equipment e ON e.id = i.equipment_id
+                LEFT JOIN (
+                    SELECT
+                        inspection_id,
+                        SUM(CASE WHEN is_ok = 1 THEN 1 ELSE 0 END) AS ok_count,
+                        SUM(CASE WHEN is_ok = 0 THEN 1 ELSE 0 END) AS nok_count
+                    FROM inspection_items
+                    GROUP BY inspection_id
+                ) items ON items.inspection_id = i.id
+                WHERE i.driver_telegram_id = ?
+                ORDER BY i.id DESC
+                """,
+                (driver_telegram_id,),
+            ).fetchall()
+
     def get_equipment(self, equipment_id: int) -> sqlite3.Row | None:
         with self._connect() as conn:
             return conn.execute(
@@ -518,14 +771,62 @@ class Database:
         with self._connect() as conn:
             return conn.execute(
                 """
-                SELECT i.*, e.type, e.brand, e.reg_number
+                SELECT
+                    i.*,
+                    e.type,
+                    e.brand,
+                    e.reg_number,
+                    COALESCE(items.nok_count, 0) AS nok_count
                 FROM inspections i
                 JOIN equipment e ON e.id = i.equipment_id
+                LEFT JOIN (
+                    SELECT
+                        inspection_id,
+                        SUM(CASE WHEN is_ok = 0 THEN 1 ELSE 0 END) AS nok_count
+                    FROM inspection_items
+                    GROUP BY inspection_id
+                ) items ON items.inspection_id = i.id
                 ORDER BY i.id DESC
                 LIMIT ?
                 """,
                 (limit,),
             ).fetchall()
+
+    def get_inspection_dashboard_stats(self, *, today_date: str) -> dict[str, int]:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT
+                    COUNT(i.id) AS total_checks,
+                    COALESCE(SUM(CASE WHEN substr(i.started_at, 1, 10) = ? THEN 1 ELSE 0 END), 0) AS today_checks,
+                    COALESCE(SUM(CASE WHEN COALESCE(items.nok_count, 0) > 0 THEN 1 ELSE 0 END), 0) AS checks_with_issues,
+                    COALESCE(SUM(CASE WHEN i.mechanic_decision = 'approved' THEN 1 ELSE 0 END), 0) AS approved_checks
+                FROM inspections i
+                LEFT JOIN (
+                    SELECT
+                        inspection_id,
+                        SUM(CASE WHEN is_ok = 0 THEN 1 ELSE 0 END) AS nok_count
+                    FROM inspection_items
+                    GROUP BY inspection_id
+                ) items ON items.inspection_id = i.id
+                """,
+                (today_date,),
+            ).fetchone()
+
+        if row is None:
+            return {
+                "total_checks": 0,
+                "today_checks": 0,
+                "checks_with_issues": 0,
+                "approved_checks": 0,
+            }
+
+        return {
+            "total_checks": int(row["total_checks"] or 0),
+            "today_checks": int(row["today_checks"] or 0),
+            "checks_with_issues": int(row["checks_with_issues"] or 0),
+            "approved_checks": int(row["approved_checks"] or 0),
+        }
 
     def get_latest_submitted_inspection_id_for_driver(self, driver_telegram_id: int) -> int | None:
         row = self.get_latest_submitted_inspection_for_driver(driver_telegram_id)
