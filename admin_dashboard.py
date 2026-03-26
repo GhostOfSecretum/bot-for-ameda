@@ -82,6 +82,13 @@ DASHBOARD_LOGO_MIME_TYPES = {
 }
 
 
+def _list_logo_files(directory: Path) -> list[Path]:
+    files: list[Path] = []
+    for extension in DASHBOARD_LOGO_MIME_TYPES:
+        files.extend(directory.glob(f"*.{extension}"))
+    return sorted(files, key=lambda path: path.stat().st_mtime, reverse=True)
+
+
 def _dashboard_logo_candidates() -> list[Path]:
     explicit_logo_path = os.getenv("ADMIN_DASHBOARD_LOGO_PATH", "").strip()
     project_root = Path(__file__).resolve().parent
@@ -98,11 +105,14 @@ def _dashboard_logo_candidates() -> list[Path]:
             project_root / "assets" / "drlogo.png",
         ]
     )
+    project_assets_dir = project_root / "assets"
+    if project_assets_dir.exists():
+        candidates.extend(_list_logo_files(project_assets_dir))
 
     workspace_slug = str(project_root).strip("/").replace("/", "-").replace(" ", "-")
     cursor_assets_dir = Path.home() / ".cursor" / "projects" / workspace_slug / "assets"
     if cursor_assets_dir.exists():
-        candidates.extend(sorted(cursor_assets_dir.glob("drlogo-*.png"), reverse=True))
+        candidates.extend(_list_logo_files(cursor_assets_dir))
 
     unique_candidates: list[Path] = []
     seen_candidates: set[Path] = set()
@@ -115,7 +125,6 @@ def _dashboard_logo_candidates() -> list[Path]:
     return unique_candidates
 
 
-@st.cache_data(show_spinner=False)
 def _load_dashboard_logo_data_uri() -> str | None:
     for logo_path in _dashboard_logo_candidates():
         if not logo_path.exists() or not logo_path.is_file():
@@ -138,14 +147,16 @@ def _inject_toolbar_logo() -> None:
     st.markdown(
         f"""
         <style>
-        [data-testid="stToolbar"] {{
+        [data-testid="stToolbar"],
+        .stAppToolbar {{
             display: flex;
             align-items: center;
             min-height: 60px;
             padding-left: 0.5rem;
         }}
 
-        [data-testid="stToolbar"]::before {{
+        [data-testid="stToolbar"]::before,
+        .stAppToolbar::before {{
             content: "";
             display: block;
             width: 180px;
@@ -159,7 +170,8 @@ def _inject_toolbar_logo() -> None:
         }}
 
         @media (max-width: 1200px) {{
-            [data-testid="stToolbar"]::before {{
+            [data-testid="stToolbar"]::before,
+            .stAppToolbar::before {{
                 width: 132px;
                 height: 34px;
             }}
