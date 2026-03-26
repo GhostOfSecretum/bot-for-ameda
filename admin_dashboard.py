@@ -147,36 +147,35 @@ def _inject_toolbar_logo() -> None:
     st.markdown(
         f"""
         <style>
-        [data-testid="stToolbar"],
-        .stAppToolbar {{
+        .dr-header-logo {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 999990;
+            height: 52px;
+            padding: 6px 16px;
             display: flex;
             align-items: center;
-            min-height: 60px;
-            padding-left: 0.5rem;
-        }}
-
-        [data-testid="stToolbar"]::before,
-        .stAppToolbar::before {{
-            content: "";
-            display: block;
-            width: 180px;
-            height: 44px;
-            margin-right: auto;
             pointer-events: none;
-            background-image: url('{logo_data_uri}');
-            background-repeat: no-repeat;
-            background-position: left center;
-            background-size: contain;
         }}
-
-        @media (max-width: 1200px) {{
-            [data-testid="stToolbar"]::before,
-            .stAppToolbar::before {{
-                width: 132px;
-                height: 34px;
+        .dr-header-logo img {{
+            height: 36px;
+            width: auto;
+            object-fit: contain;
+        }}
+        @media (max-width: 768px) {{
+            .dr-header-logo {{
+                height: 44px;
+                padding: 4px 10px;
+            }}
+            .dr-header-logo img {{
+                height: 28px;
             }}
         }}
         </style>
+        <div class="dr-header-logo">
+            <img src="{logo_data_uri}" alt="Logo" />
+        </div>
         """,
         unsafe_allow_html=True,
     )
