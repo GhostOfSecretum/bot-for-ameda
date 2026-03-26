@@ -144,7 +144,7 @@ def _inject_toolbar_logo() -> None:
     if logo_data_uri is None:
         return
 
-    st.markdown(
+    st.html(
         f"""
         <style>
         .dr-header-logo {{
@@ -176,8 +176,7 @@ def _inject_toolbar_logo() -> None:
         <div class="dr-header-logo">
             <img src="{logo_data_uri}" alt="Logo" />
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
 
