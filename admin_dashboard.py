@@ -9,7 +9,15 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from app.db import Database
-from app.i18n import required_photo_labels
+from app.i18n import (
+    CHECKLIST_ITEMS_FOREIGN_I18N,
+    CHECKLIST_ITEMS_I18N,
+    CHECKLIST_ITEMS_ROLLERS_I18N,
+    CHECKLIST_ITEMS_SPECIAL_I18N,
+    CHECKLIST_ITEMS_SPECIAL_WITHOUT_JOINTS_I18N,
+    DUMP_TRUCK_TENT_ITEM_I18N,
+    required_photo_labels,
+)
 from app.time_utils import now_moscow
 
 
@@ -50,6 +58,13 @@ DAILY_ACTION_FILTER_LABELS_RU = {
     "end_workday": "Завершение смены",
     "service": "Обслуживание",
 }
+CHECKLIST_I18N_GROUPS = [
+    CHECKLIST_ITEMS_I18N,
+    CHECKLIST_ITEMS_FOREIGN_I18N,
+    CHECKLIST_ITEMS_ROLLERS_I18N,
+    CHECKLIST_ITEMS_SPECIAL_I18N,
+    CHECKLIST_ITEMS_SPECIAL_WITHOUT_JOINTS_I18N,
+]
 DASHBOARD_SECTION_LINKS = [
     ("Аналитика", "section-analytics"),
     ("История отчетов", "section-inspections-history"),
@@ -97,6 +112,38 @@ def _daily_action_photo_caption(photo_type: str | None) -> str:
     if photo_type == "fuel":
         return "Уровень топлива"
     return _required_photo_caption(photo_type)
+
+
+def _build_checklist_item_to_ru_map() -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for group in CHECKLIST_I18N_GROUPS:
+        ru_items = group.get("ru", [])
+        for items_by_language in group.values():
+            for index, localized_item in enumerate(items_by_language):
+                if index >= len(ru_items):
+                    continue
+                localized_key = str(localized_item).strip()
+                ru_label = str(ru_items[index]).strip()
+                if localized_key and ru_label:
+                    mapping[localized_key] = ru_label
+
+    ru_dump_truck_tent = str(DUMP_TRUCK_TENT_ITEM_I18N.get("ru", "")).strip()
+    if ru_dump_truck_tent:
+        for localized_tent in DUMP_TRUCK_TENT_ITEM_I18N.values():
+            localized_key = str(localized_tent).strip()
+            if localized_key:
+                mapping[localized_key] = ru_dump_truck_tent
+    return mapping
+
+
+CHECKLIST_ITEM_TO_RU = _build_checklist_item_to_ru_map()
+
+
+def _checklist_item_label_ru(item_name: str | None) -> str:
+    normalized = str(item_name or "").strip()
+    if not normalized:
+        return "—"
+    return CHECKLIST_ITEM_TO_RU.get(normalized, normalized)
 
 
 def _translate_status(value: str | None, labels: dict[str, str], default: str = "—") -> str:
@@ -597,13 +644,14 @@ def _render_inspection_details(inspection_id: int) -> None:
             st.success("Проблемы не выявлены")
         else:
             for index, item in enumerate(problematic_items, start=1):
-                st.write(f"**{index}. {item['item_name']}**")
+                item_label = _checklist_item_label_ru(item["item_name"])
+                st.write(f"**{index}. {item_label}**")
                 st.caption(item["comment"] or "Комментарий не указан")
                 issue_photo_path = item["issue_photo_path"]
                 if issue_photo_path and Path(issue_photo_path).exists():
                     st.image(
                         issue_photo_path,
-                        caption=f"Неисправность: {item['item_name']}",
+                        caption=f"Неисправность: {item_label}",
                         width=320,
                     )
                 if index < len(problematic_items):
@@ -613,7 +661,8 @@ def _render_inspection_details(inspection_id: int) -> None:
     with st.expander("Показать все пункты"):
         for item in details["items"]:
             status = "✅" if item["is_ok"] == 1 else "❌"
-            st.write(f"- {item['item_name']}: {status}")
+            item_label = _checklist_item_label_ru(item["item_name"])
+            st.write(f"- {item_label}: {status}")
             if item["comment"]:
                 st.caption(f"Комментарий: {item['comment']}")
 

@@ -1453,7 +1453,12 @@ class InspectionBot:
 
         if action == "ok":
             item_order = draft.checklist_index + 1
-            item_name = items[draft.checklist_index]
+            fallback_item_name = items[draft.checklist_index]
+            item_name = self._inspection_item_name_ru(
+                draft,
+                item_index=draft.checklist_index,
+                fallback_item_name=fallback_item_name,
+            )
             self.db.add_inspection_item(
                 inspection_id=draft.inspection_id,
                 item_order=item_order,
@@ -2013,6 +2018,25 @@ class InspectionBot:
         }
         return t(language, title_map.get(action_key or "", "daily_actions_menu_button"))
 
+    @staticmethod
+    def _inspection_item_name_ru(
+        draft: InspectionDraft,
+        *,
+        item_index: int,
+        fallback_item_name: str,
+    ) -> str:
+        ru_items = checklist_items(
+            "ru",
+            draft.driver_license_type,
+            draft.equipment_type,
+        )
+        if 0 <= item_index < len(ru_items):
+            return ru_items[item_index]
+        normalized_fallback = (fallback_item_name or "").strip()
+        if normalized_fallback:
+            return normalized_fallback
+        return "Пункт чек-листа"
+
     async def _submit_daily_action_report(
         self,
         message: Message,
@@ -2396,7 +2420,12 @@ class InspectionBot:
             return
 
         item_order = draft.checklist_index + 1
-        item_name = items[draft.checklist_index]
+        fallback_item_name = items[draft.checklist_index]
+        item_name = self._inspection_item_name_ru(
+            draft,
+            item_index=draft.checklist_index,
+            fallback_item_name=fallback_item_name,
+        )
         self.db.add_inspection_item(
             inspection_id=draft.inspection_id,
             item_order=item_order,
