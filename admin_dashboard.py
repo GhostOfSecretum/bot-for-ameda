@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import os
 from datetime import date
 from pathlib import Path
@@ -72,6 +73,101 @@ DASHBOARD_SECTION_LINKS = [
     ("Панель техники", "section-equipment-panel"),
     ("Панель водителей", "section-driver-panel"),
 ]
+DASHBOARD_LOGO_MIME_TYPES = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "webp": "image/webp",
+    "svg": "image/svg+xml",
+}
+
+
+def _dashboard_logo_candidates() -> list[Path]:
+    explicit_logo_path = os.getenv("ADMIN_DASHBOARD_LOGO_PATH", "").strip()
+    project_root = Path(__file__).resolve().parent
+    candidates: list[Path] = []
+
+    if explicit_logo_path:
+        logo_path = Path(explicit_logo_path).expanduser()
+        candidates.append(logo_path if logo_path.is_absolute() else (project_root / logo_path))
+
+    candidates.extend(
+        [
+            project_root / "assets" / "dashboard_logo.png",
+            project_root / "assets" / "logo.png",
+            project_root / "assets" / "drlogo.png",
+        ]
+    )
+
+    workspace_slug = str(project_root).strip("/").replace("/", "-").replace(" ", "-")
+    cursor_assets_dir = Path.home() / ".cursor" / "projects" / workspace_slug / "assets"
+    if cursor_assets_dir.exists():
+        candidates.extend(sorted(cursor_assets_dir.glob("drlogo-*.png"), reverse=True))
+
+    unique_candidates: list[Path] = []
+    seen_candidates: set[Path] = set()
+    for candidate in candidates:
+        resolved_candidate = candidate.resolve()
+        if resolved_candidate in seen_candidates:
+            continue
+        seen_candidates.add(resolved_candidate)
+        unique_candidates.append(resolved_candidate)
+    return unique_candidates
+
+
+@st.cache_data(show_spinner=False)
+def _load_dashboard_logo_data_uri() -> str | None:
+    for logo_path in _dashboard_logo_candidates():
+        if not logo_path.exists() or not logo_path.is_file():
+            continue
+
+        logo_mime_type = DASHBOARD_LOGO_MIME_TYPES.get(logo_path.suffix.lower().lstrip("."))
+        if logo_mime_type is None:
+            continue
+
+        encoded_logo = base64.b64encode(logo_path.read_bytes()).decode("ascii")
+        return f"data:{logo_mime_type};base64,{encoded_logo}"
+    return None
+
+
+def _inject_toolbar_logo() -> None:
+    logo_data_uri = _load_dashboard_logo_data_uri()
+    if logo_data_uri is None:
+        return
+
+    st.markdown(
+        f"""
+        <style>
+        [data-testid="stToolbar"] {{
+            display: flex;
+            align-items: center;
+            min-height: 60px;
+            padding-left: 0.5rem;
+        }}
+
+        [data-testid="stToolbar"]::before {{
+            content: "";
+            display: block;
+            width: 180px;
+            height: 44px;
+            margin-right: auto;
+            pointer-events: none;
+            background-image: url('{logo_data_uri}');
+            background-repeat: no-repeat;
+            background-position: left center;
+            background-size: contain;
+        }}
+
+        @media (max-width: 1200px) {{
+            [data-testid="stToolbar"]::before {{
+                width: 132px;
+                height: 34px;
+            }}
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _parse_positive_int(value: object) -> int | None:
@@ -682,6 +778,7 @@ def _render_inspection_details(inspection_id: int) -> None:
 
 
 st.set_page_config(page_title="Приемка спецтехники", layout="wide")
+_inject_toolbar_logo()
 title_col, quick_nav_col = st.columns([5, 1.6])
 with title_col:
     st.title("Админ-панель: цифровая приемка спецтехники")
