@@ -811,15 +811,31 @@ def _render_inspection_details(inspection_id: int) -> None:
 
 
 st.set_page_config(page_title="Приемка спецтехники", layout="wide")
+
+if "auth_ok" not in st.session_state:
+    st.session_state["auth_ok"] = False
+
+_admin_password = os.getenv("ADMIN_DASHBOARD_PASSWORD", "change_me").strip()
+
+if not st.session_state["auth_ok"]:
+    _inject_toolbar_logo()
+    st.title("Вход в админ-панель")
+    with st.form("admin_login"):
+        pwd = st.text_input("Пароль", type="password")
+        submitted = st.form_submit_button("Войти")
+    if submitted:
+        if pwd == _admin_password:
+            st.session_state["auth_ok"] = True
+            st.rerun()
+        st.error("Неверный пароль")
+    st.stop()
+
 _inject_toolbar_logo()
 title_col, quick_nav_col = st.columns([5, 1.6])
 with title_col:
     st.title("Админ-панель: цифровая приемка спецтехники")
 with quick_nav_col:
     _render_quick_navigation_menu()
-
-if "auth_ok" not in st.session_state:
-    st.session_state["auth_ok"] = True
 
 dashboard_stats = db.get_inspection_dashboard_stats(today_date=now_moscow().date().isoformat())
 rows = db.get_recent_inspections(limit=300)
