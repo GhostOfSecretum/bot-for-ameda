@@ -802,7 +802,6 @@ def _render_inspection_details(inspection_id: int) -> None:
         )
         if delete_clicked and st.session_state.get(confirm_key, False):
             if db.delete_inspection(inspection_id):
-                st.session_state[confirm_key] = False
                 if str(st.query_params.get("inspection_id", "")) == str(inspection_id):
                     del st.query_params["inspection_id"]
                 st.success(f"Отчёт #{inspection_id} удалён.")
