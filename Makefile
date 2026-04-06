@@ -1,4 +1,4 @@
-.PHONY: backup restore deploy
+.PHONY: backup restore deploy install-ssh-key
 
 backup:
 	bash scripts/backup.sh
@@ -12,3 +12,7 @@ restore:
 
 deploy:
 	bash scripts/deploy.sh "$(BRANCH)"
+
+# Однократно: скопировать SSH-ключ на сервер (Host ameda в ~/.ssh/config), дальше вход без пароля.
+install-ssh-key:
+	bash scripts/install-ssh-pubkey.sh
