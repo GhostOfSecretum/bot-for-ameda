@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import shutil
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -1013,6 +1015,67 @@ class Database:
             ).fetchone()
         summary["equipment"] = dict(equipment) if equipment else {}
         return summary
+
+    @staticmethod
+    def _resolved_photos_dir() -> Path:
+        raw = Path(os.getenv("PHOTOS_DIR", "data/photos")).expanduser()
+        if not raw.is_absolute():
+            project_root = Path(__file__).resolve().parents[1]
+            raw = project_root / raw
+        return raw.resolve()
+
+    def delete_inspection(self, inspection_id: int) -> bool:
+        """Удаляет отчёт приёмки, связанные записи (каскад), снимает привязку в daily_action_reports и файлы фото."""
+        with self._connect() as conn:
+            exists = conn.execute(
+                "SELECT 1 FROM inspections WHERE id = ?",
+                (inspection_id,),
+            ).fetchone()
+            if not exists:
+                return False
+
+            items = conn.execute(
+                "SELECT issue_photo_path FROM inspection_items WHERE inspection_id = ?",
+                (inspection_id,),
+            ).fetchall()
+            photos = conn.execute(
+                "SELECT file_path FROM inspection_required_photos WHERE inspection_id = ?",
+                (inspection_id,),
+            ).fetchall()
+
+            paths_to_remove: list[Path] = []
+            for row in items:
+                p = row["issue_photo_path"]
+                if p:
+                    paths_to_remove.append(Path(p))
+            for row in photos:
+                paths_to_remove.append(Path(row["file_path"]))
+
+            conn.execute(
+                """
+                UPDATE daily_action_reports
+                SET linked_inspection_id = NULL
+                WHERE linked_inspection_id = ?
+                """,
+                (inspection_id,),
+            )
+            conn.execute("DELETE FROM inspections WHERE id = ?", (inspection_id,))
+
+        for path in paths_to_remove:
+            try:
+                if path.is_file():
+                    path.unlink()
+            except OSError:
+                pass
+
+        inspection_dir = self._resolved_photos_dir() / str(inspection_id)
+        try:
+            if inspection_dir.is_dir():
+                shutil.rmtree(inspection_dir, ignore_errors=True)
+        except OSError:
+            pass
+
+        return True
 
     def add_audit(
         self,

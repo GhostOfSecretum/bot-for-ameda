@@ -786,6 +786,30 @@ def _render_inspection_details(inspection_id: int) -> None:
 
     _render_images_in_single_row(required_images)
 
+    st.divider()
+    with st.expander("Удаление отчёта", expanded=False):
+        st.caption(
+            "Безвозвратно удалит этот отчёт из базы, все пункты чек-листа и фото на диске. "
+            "Привязка к отчёту в журнале смены будет снята."
+        )
+        confirm_key = f"inspection_delete_confirm_{inspection_id}"
+        st.checkbox("Я понимаю последствия и хочу удалить этот отчёт", key=confirm_key)
+        delete_clicked = st.button(
+            "Удалить отчёт безвозвратно",
+            type="primary",
+            key=f"inspection_delete_btn_{inspection_id}",
+            disabled=not st.session_state.get(confirm_key, False),
+        )
+        if delete_clicked and st.session_state.get(confirm_key, False):
+            if db.delete_inspection(inspection_id):
+                st.session_state[confirm_key] = False
+                if str(st.query_params.get("inspection_id", "")) == str(inspection_id):
+                    del st.query_params["inspection_id"]
+                st.success(f"Отчёт #{inspection_id} удалён.")
+                st.rerun()
+            else:
+                st.error("Не удалось удалить отчёт (возможно, он уже удалён).")
+
 
 st.set_page_config(page_title="Приемка спецтехники", layout="wide")
 _inject_toolbar_logo()
