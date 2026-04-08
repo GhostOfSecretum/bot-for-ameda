@@ -139,42 +139,73 @@ def _load_dashboard_logo_data_uri() -> str | None:
     return None
 
 
-def _inject_toolbar_logo() -> None:
+def _inject_custom_header_strip() -> None:
+    """Скрывает штатную панель Streamlit и оставляет полосу под логотип (см. assets или ADMIN_DASHBOARD_LOGO_PATH)."""
     logo_data_uri = _load_dashboard_logo_data_uri()
-    if logo_data_uri is None:
-        return
+
+    logo_block = ""
+    if logo_data_uri is not None:
+        logo_block = f'<div class="dr-header-logo"><img src="{logo_data_uri}" alt="Logo" /></div>'
 
     st.html(
         f"""
         <style>
-        .dr-header-logo {{
+        [data-testid="stToolbar"] {{
+            display: none !important;
+        }}
+        header[data-testid="stHeader"],
+        .stAppHeader {{
+            min-height: 60px;
+            box-sizing: border-box;
+        }}
+        .dr-header-strip {{
             position: fixed;
             top: 0;
             left: 0;
+            right: 0;
             z-index: 999990;
-            height: 52px;
-            padding: 6px 16px;
+            height: 60px;
+            padding: 0 16px;
             display: flex;
             align-items: center;
+            box-sizing: border-box;
+            background-color: var(--secondary-background-color);
+            border-bottom: 1px solid rgba(128, 128, 128, 0.2);
             pointer-events: none;
+        }}
+        .dr-header-logo {{
+            display: flex;
+            align-items: center;
+            height: 100%;
         }}
         .dr-header-logo img {{
             height: 36px;
             width: auto;
+            max-width: min(280px, 55vw);
             object-fit: contain;
         }}
+        .stApp .main .block-container {{
+            padding-top: 4.5rem;
+        }}
         @media (max-width: 768px) {{
-            .dr-header-logo {{
-                height: 44px;
-                padding: 4px 10px;
+            header[data-testid="stHeader"],
+            .stAppHeader {{
+                min-height: 52px;
+            }}
+            .dr-header-strip {{
+                height: 52px;
+                padding: 0 10px;
             }}
             .dr-header-logo img {{
                 height: 28px;
             }}
+            .stApp .main .block-container {{
+                padding-top: 4rem;
+            }}
         }}
         </style>
-        <div class="dr-header-logo">
-            <img src="{logo_data_uri}" alt="Logo" />
+        <div class="dr-header-strip" aria-hidden="true">
+            {logo_block}
         </div>
         """
     )
@@ -818,7 +849,7 @@ if "auth_ok" not in st.session_state:
 _admin_password = os.getenv("ADMIN_DASHBOARD_PASSWORD", "change_me").strip()
 
 if not st.session_state["auth_ok"]:
-    _inject_toolbar_logo()
+    _inject_custom_header_strip()
     st.title("Вход в админ-панель")
     with st.form("admin_login"):
         pwd = st.text_input("Пароль", type="password")
@@ -830,7 +861,7 @@ if not st.session_state["auth_ok"]:
         st.error("Неверный пароль")
     st.stop()
 
-_inject_toolbar_logo()
+_inject_custom_header_strip()
 title_col, quick_nav_col = st.columns([5, 1.6])
 with title_col:
     st.title("Админ-панель: цифровая приемка спецтехники")
