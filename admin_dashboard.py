@@ -621,7 +621,7 @@ def _render_recommendation_analytics_block(
 
         issue_col, approval_col, pending_col = st.columns(3)
         with issue_col:
-            st.metric("Доля проверок с косяками", f"{issue_rate:.1f}%")
+            st.metric("Доля проверок с проблемами", f"{issue_rate:.1f}%")
         with approval_col:
             st.metric("Доля одобрений", f"{approval_rate:.1f}%")
         with pending_col:
