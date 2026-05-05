@@ -3,15 +3,30 @@ from __future__ import annotations
 from typing import Any
 
 from app.constants import CHECKLIST_ITEMS
+from app.i18n_hy import (
+    BACK_LABEL as HY_BACK_LABEL,
+    CHECKLIST_ITEMS as HY_CHECKLIST_ITEMS,
+    CHECKLIST_ITEMS_FOREIGN as HY_CHECKLIST_ITEMS_FOREIGN,
+    CHECKLIST_ITEMS_ROLLERS as HY_CHECKLIST_ITEMS_ROLLERS,
+    CHECKLIST_ITEMS_SPECIAL as HY_CHECKLIST_ITEMS_SPECIAL,
+    CHECKLIST_ITEMS_SPECIAL_WITHOUT_JOINTS as HY_CHECKLIST_ITEMS_SPECIAL_WITHOUT_JOINTS,
+    DRIVER_LICENSE_TYPE_LABELS as HY_DRIVER_LICENSE_TYPE_LABELS,
+    DRIVER_STATUS_TEXT as HY_DRIVER_STATUS_TEXT,
+    DUMP_TRUCK_TENT_ITEM as HY_DUMP_TRUCK_TENT_ITEM,
+    EQUIPMENT_TYPE_LABELS as HY_EQUIPMENT_TYPE_LABELS,
+    REQUIRED_PHOTO_LABELS as HY_REQUIRED_PHOTO_LABELS,
+    TEXTS as HY_TEXTS,
+)
 
 
 DEFAULT_LANGUAGE = "ru"
-SUPPORTED_LANGUAGES = {"ru", "tg", "uz"}
+SUPPORTED_LANGUAGES = {"ru", "tg", "uz", "hy"}
 
 BACK_LABELS = {
     "ru": "Назад",
     "tg": "Бозгашт",
     "uz": "Ortga",
+    "hy": HY_BACK_LABEL,
 }
 
 DRIVER_LICENSE_TYPE_LABELS_I18N = {
@@ -27,6 +42,7 @@ DRIVER_LICENSE_TYPE_LABELS_I18N = {
         "ru_by": "Rossiya va Belarus",
         "foreign": "Chet el",
     },
+    "hy": HY_DRIVER_LICENSE_TYPE_LABELS,
 }
 
 REQUIRED_PHOTO_LABELS_I18N = {
@@ -51,6 +67,7 @@ REQUIRED_PHOTO_LABELS_I18N = {
         "right": "O'ng tomondan foto",
         "dashboard": "Panel fotosi",
     },
+    "hy": HY_REQUIRED_PHOTO_LABELS,
 }
 
 CHECKLIST_ITEMS_I18N = {
@@ -73,6 +90,7 @@ CHECKLIST_ITEMS_I18N = {
         "Faralar / gabarit chiroqlar sozligi",
         "Kabina va kuzov tozaligi / kalitlar to'plami",
     ],
+    "hy": HY_CHECKLIST_ITEMS,
 }
 
 CHECKLIST_ITEMS_FOREIGN_I18N = {
@@ -103,6 +121,7 @@ CHECKLIST_ITEMS_FOREIGN_I18N = {
         "Faralar / gabarit chiroqlar sozligi",
         "Kabina va kuzov tozaligi / kalitlar to'plami",
     ],
+    "hy": HY_CHECKLIST_ITEMS_FOREIGN,
 }
 
 SPECIAL_CHECKLIST_EQUIPMENT_TYPES = {
@@ -126,6 +145,7 @@ DUMP_TRUCK_TENT_ITEM_I18N = {
     "ru": "Самосвал: наличие палатки",
     "tg": "Самосвал: мавҷудияти палатка",
     "uz": "Samosval: tent mavjudligi",
+    "hy": HY_DUMP_TRUCK_TENT_ITEM,
 }
 
 CHECKLIST_ITEMS_ROLLERS_I18N = {
@@ -162,6 +182,7 @@ CHECKLIST_ITEMS_ROLLERS_I18N = {
         "Sug'orish tizimi holati (filtr tozaligi va nasosning ishchi holati)",
         "Ulanishlar holati (palets, vtulka)",
     ],
+    "hy": HY_CHECKLIST_ITEMS_ROLLERS,
 }
 
 CHECKLIST_ITEMS_SPECIAL_I18N = {
@@ -201,6 +222,7 @@ CHECKLIST_ITEMS_SPECIAL_I18N = {
         "Sarf materiallari holati (tishlar, kovsh tig'i)",
         "Ulanishlar holati (palets, vtulka)",
     ],
+    "hy": HY_CHECKLIST_ITEMS_SPECIAL,
 }
 
 CHECKLIST_ITEMS_SPECIAL_WITHOUT_JOINTS_I18N = {
@@ -240,6 +262,7 @@ CHECKLIST_ITEMS_SPECIAL_WITHOUT_JOINTS_I18N = {
         "Sarf materiallari holati (tishlar, kovsh tig'i)",
         "Boshqaruv pultlari, nivelirlash datchiklari",
     ],
+    "hy": HY_CHECKLIST_ITEMS_SPECIAL_WITHOUT_JOINTS,
 }
 
 EQUIPMENT_TYPE_LABELS_I18N = {
@@ -285,6 +308,7 @@ EQUIPMENT_TYPE_LABELS_I18N = {
         "Асфальтоукладчики": "Asfalt yotqizgichlar",
         "Фрезы": "Frezalar",
     },
+    "hy": HY_EQUIPMENT_TYPE_LABELS,
 }
 
 DRIVER_STATUS_TEXT_I18N = {
@@ -303,6 +327,7 @@ DRIVER_STATUS_TEXT_I18N = {
         "rejected": "Chiqish taqiqlandi. Mexanik oldiga boring.",
         "repair": "Texnika ta'mirga yuborildi. Mexanik oldiga boring.",
     },
+    "hy": HY_DRIVER_STATUS_TEXT,
 }
 
 TEXTS = {
@@ -1132,6 +1157,9 @@ TEXTS = {
         "uz": "Hisobot №{inspection_id} mexaniklarga yetkazildi. Haydovchi bosqichi yakunlandi.\nMexanik qarorini kuting.\nYangi qabul uchun /start dan foydalaning.",
     },
 }
+
+for key, value in HY_TEXTS.items():
+    TEXTS.setdefault(key, {})["hy"] = value
 
 
 def normalize_language(language: str | None) -> str:

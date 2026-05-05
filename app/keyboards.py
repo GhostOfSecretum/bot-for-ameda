@@ -92,6 +92,7 @@ def language_keyboard(selected_language: str | None = None) -> InlineKeyboardMar
         "ru": "Русский",
         "tg": "Тоҷикӣ",
         "uz": "O'zbekcha",
+        "hy": "Հայերեն",
     }
     builder = InlineKeyboardBuilder()
     for code, label in labels.items():

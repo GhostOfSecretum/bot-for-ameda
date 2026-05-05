@@ -2379,8 +2379,15 @@ class InspectionBot:
             await self._ask_required_photos(message, draft)
             return
         item = items[idx]
-        ok_text = {"ru": "✅ ОК", "tg": "✅ ОК", "uz": "✅ OK"}[normalize_language(lang)]
-        nok_text = {"ru": "❌ Не ОК", "tg": "❌ На ОК", "uz": "❌ OK emas"}[normalize_language(lang)]
+        ok_text = {"ru": "✅ ОК", "tg": "✅ ОК", "uz": "✅ OK", "hy": "✅ Լավ"}[
+            normalize_language(lang)
+        ]
+        nok_text = {
+            "ru": "❌ Не ОК",
+            "tg": "❌ На ОК",
+            "uz": "❌ OK emas",
+            "hy": "❌ Խնդիր կա",
+        }[normalize_language(lang)]
         await message.answer(
             t(lang, "checklist_item", current=idx + 1, total=len(items), item=item),
             reply_markup=yes_no_keyboard(
