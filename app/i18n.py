@@ -566,6 +566,16 @@ TEXTS = {
         "tg": "Бо тугма интихоб кунед: «Ҳа» ё «Не».",
         "uz": "Tugma bilan tanlang: «Ha» yoki «Yo'q».",
     },
+    "daily_end_workday_trip_count_prompt": {
+        "ru": "Сколько рейсов выполнено в течение смены? Отправьте число.",
+        "tg": "Дар давоми смена чанд рейс иҷро шуд? Рақамро фиристед.",
+        "uz": "Smena davomida nechta reys bajarildi? Sonni yuboring.",
+    },
+    "daily_end_workday_trip_count_invalid": {
+        "ru": "Введите количество рейсов целым числом: 0, 1, 2 и так далее.",
+        "tg": "Шумораи рейсҳоро бо адади бутун ворид кунед: 0, 1, 2 ва ғайра.",
+        "uz": "Reyslar sonini butun son bilan kiriting: 0, 1, 2 va hokazo.",
+    },
     "daily_end_workday_fuel_level_photo_prompt": {
         "ru": "Отправьте обязательное фото: Уровень топлива.",
         "tg": "Акси ҳатмиро фиристед: Сатҳи сӯзишворӣ.",
@@ -645,6 +655,11 @@ TEXTS = {
         "ru": "Время",
         "tg": "Вақт",
         "uz": "Vaqt",
+    },
+    "daily_report_trip_count": {
+        "ru": "Количество рейсов за смену",
+        "tg": "Шумораи рейсҳо дар смена",
+        "uz": "Smena davomidagi reyslar soni",
     },
     "daily_report_title_blow_filters": {
         "ru": "🧰 Отчет: Продувка фильтров",

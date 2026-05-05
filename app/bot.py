@@ -112,12 +112,14 @@ class InspectionDraft:
     waiting_for_daily_refuel_confirm: bool = False
     waiting_for_daily_refuel_photo: bool = False
     waiting_for_daily_end_workday_refuel: bool = False
+    waiting_for_daily_end_workday_trip_count: bool = False
     waiting_for_daily_end_workday_fuel_photo: bool = False
     waiting_for_daily_end_workday_photos: bool = False
     waiting_for_daily_end_workday_location: bool = False
     daily_action_key: str | None = None
     daily_action_status_key: str | None = None
     daily_action_comment: str | None = None
+    daily_end_workday_trip_count: int | None = None
     daily_end_workday_fuel_photo_path: str | None = None
     daily_end_workday_required_photos: dict[str, str] = field(default_factory=dict)
     daily_end_workday_location: tuple[float, float] | None = None
@@ -828,11 +830,17 @@ class InspectionBot:
             refuel_no = t(lang, "daily_end_workday_refuel_no_button")
             if text == refuel_yes:
                 draft.daily_action_status_key = "yes"
-                await self._ask_daily_end_workday_photos(message, draft, lang=lang)
+                if self._should_ask_end_workday_trip_count(draft):
+                    await self._ask_daily_end_workday_trip_count(message, draft, lang=lang)
+                else:
+                    await self._ask_daily_end_workday_photos(message, draft, lang=lang)
                 return
             if text == refuel_no:
                 draft.daily_action_status_key = "no"
-                await self._ask_daily_end_workday_photos(message, draft, lang=lang)
+                if self._should_ask_end_workday_trip_count(draft):
+                    await self._ask_daily_end_workday_trip_count(message, draft, lang=lang)
+                else:
+                    await self._ask_daily_end_workday_photos(message, draft, lang=lang)
                 return
             await message.answer(
                 t(lang, "daily_end_workday_refuel_buttons_hint"),
@@ -845,9 +853,24 @@ class InspectionBot:
             )
             return
 
-        if draft.waiting_for_daily_end_workday_fuel_photo:
+        if draft.waiting_for_daily_end_workday_trip_count:
             if back_requested:
                 await self._ask_daily_end_workday_refuel(message, draft, lang=lang)
+                return
+            normalized = text.replace(" ", "")
+            if not normalized.isdigit():
+                await message.answer(t(lang, "daily_end_workday_trip_count_invalid"))
+                return
+            draft.daily_end_workday_trip_count = int(normalized)
+            await self._ask_daily_end_workday_photos(message, draft, lang=lang)
+            return
+
+        if draft.waiting_for_daily_end_workday_fuel_photo:
+            if back_requested:
+                if self._should_ask_end_workday_trip_count(draft):
+                    await self._ask_daily_end_workday_trip_count(message, draft, lang=lang)
+                else:
+                    await self._ask_daily_end_workday_refuel(message, draft, lang=lang)
                 return
             await message.answer(
                 t(lang, "daily_end_workday_fuel_level_photo_waiting"),
@@ -862,7 +885,10 @@ class InspectionBot:
 
         if draft.waiting_for_daily_end_workday_photos:
             if back_requested:
-                await self._ask_daily_end_workday_refuel(message, draft, lang=lang)
+                if self._should_ask_end_workday_trip_count(draft):
+                    await self._ask_daily_end_workday_trip_count(message, draft, lang=lang)
+                else:
+                    await self._ask_daily_end_workday_refuel(message, draft, lang=lang)
                 return
             await message.answer(
                 t(lang, "daily_end_workday_photo_waiting"),
@@ -1309,6 +1335,9 @@ class InspectionBot:
             if draft.waiting_for_daily_end_workday_refuel:
                 await self._ask_daily_end_workday_refuel(message, draft, lang=lang)
                 return
+            if draft.waiting_for_daily_end_workday_trip_count:
+                await self._ask_daily_end_workday_trip_count(message, draft, lang=lang)
+                return
             if draft.waiting_for_daily_end_workday_fuel_photo:
                 await self._ask_daily_end_workday_fuel_photo(message, draft, lang=lang)
                 return
@@ -1721,6 +1750,7 @@ class InspectionBot:
         draft.waiting_for_daily_refuel_confirm = False
         draft.waiting_for_daily_refuel_photo = False
         draft.waiting_for_daily_end_workday_refuel = False
+        draft.waiting_for_daily_end_workday_trip_count = False
         draft.waiting_for_daily_end_workday_fuel_photo = False
         draft.waiting_for_daily_end_workday_photos = False
         draft.waiting_for_daily_end_workday_location = False
@@ -1732,9 +1762,22 @@ class InspectionBot:
         draft.daily_action_key = None
         draft.daily_action_status_key = None
         draft.daily_action_comment = None
+        draft.daily_end_workday_trip_count = None
         draft.daily_end_workday_fuel_photo_path = None
         draft.daily_end_workday_required_photos = {}
         draft.daily_end_workday_location = None
+
+    @staticmethod
+    def _is_dump_truck_equipment_type(equipment_type: str | None) -> bool:
+        return (equipment_type or "").strip() == "Самосвалы"
+
+    def _should_ask_end_workday_trip_count(self, draft: InspectionDraft) -> bool:
+        if self._is_dump_truck_equipment_type(draft.equipment_type):
+            return True
+        latest_equipment_type = self.db.get_latest_submitted_equipment_type_for_driver(
+            draft.driver_tg_id
+        )
+        return self._is_dump_truck_equipment_type(latest_equipment_type)
 
     async def _ask_daily_actions_root(
         self,
@@ -1857,6 +1900,7 @@ class InspectionBot:
         language = lang or self._draft_language(user_id=draft.driver_tg_id, draft=draft)
         self._reset_daily_actions_waiting_flags(draft)
         draft.waiting_for_daily_end_workday_refuel = True
+        draft.daily_end_workday_trip_count = None
         draft.daily_end_workday_fuel_photo_path = None
         draft.daily_end_workday_required_photos = {}
         draft.daily_end_workday_location = None
@@ -1868,6 +1912,26 @@ class InspectionBot:
                     t(language, "daily_end_workday_refuel_no_button"),
                 ],
                 width=2,
+                with_back=True,
+                back_text=back_label(language),
+            ),
+        )
+
+    async def _ask_daily_end_workday_trip_count(
+        self,
+        message: Message,
+        draft: InspectionDraft,
+        *,
+        lang: str | None = None,
+    ) -> None:
+        language = lang or self._draft_language(user_id=draft.driver_tg_id, draft=draft)
+        self._reset_daily_actions_waiting_flags(draft)
+        draft.waiting_for_daily_end_workday_trip_count = True
+        await message.answer(
+            t(language, "daily_end_workday_trip_count_prompt"),
+            reply_markup=simple_reply_keyboard(
+                [],
+                width=1,
                 with_back=True,
                 back_text=back_label(language),
             ),
@@ -2060,6 +2124,12 @@ class InspectionBot:
             if draft.daily_action_status_key not in {"yes", "no"}:
                 await self._ask_daily_end_workday_refuel(message, draft, lang=lang)
                 return
+            if (
+                self._should_ask_end_workday_trip_count(draft)
+                and draft.daily_end_workday_trip_count is None
+            ):
+                await self._ask_daily_end_workday_trip_count(message, draft, lang=lang)
+                return
             if end_workday_fuel_photo_path is None:
                 end_workday_fuel_photo_path = draft.daily_end_workday_fuel_photo_path
             if end_workday_photo_paths is None:
@@ -2135,6 +2205,7 @@ class InspectionBot:
             comment=draft.daily_action_comment,
             photo_path=photo_path,
             linked_inspection_id=linked_inspection_id,
+            trip_count=draft.daily_end_workday_trip_count if action_key == "end_workday" else None,
         )
         if action_key == "end_workday":
             if photo_path:
@@ -2184,6 +2255,11 @@ class InspectionBot:
             report_lines.append(escape(t(report_lang, "daily_report_result_end_workday_refuel_yes")))
         elif action_key == "end_workday" and draft.daily_action_status_key == "no":
             report_lines.append(escape(t(report_lang, "daily_report_result_end_workday_refuel_no")))
+        if action_key == "end_workday" and draft.daily_end_workday_trip_count is not None:
+            report_lines.append(
+                f"{escape(t(report_lang, 'daily_report_trip_count'))}: "
+                f"<b>{draft.daily_end_workday_trip_count}</b>"
+            )
         if action_key == "end_workday" and end_workday_location is not None:
             latitude, longitude = end_workday_location
             report_lines.append(

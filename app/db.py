@@ -111,6 +111,7 @@ class Database:
                     comment TEXT,
                     photo_path TEXT,
                     linked_inspection_id INTEGER,
+                    trip_count INTEGER,
                     created_at TEXT NOT NULL,
                     delivered_at TEXT,
                     delivery_status TEXT NOT NULL DEFAULT 'pending',
@@ -160,6 +161,8 @@ class Database:
                 conn.execute(
                     "ALTER TABLE daily_action_reports ADD COLUMN linked_inspection_id INTEGER"
                 )
+            if "trip_count" not in daily_action_columns:
+                conn.execute("ALTER TABLE daily_action_reports ADD COLUMN trip_count INTEGER")
             if "fuel_decision" not in daily_action_columns:
                 conn.execute("ALTER TABLE daily_action_reports ADD COLUMN fuel_decision TEXT")
             if "fuel_decision_by" not in daily_action_columns:
@@ -867,6 +870,7 @@ class Database:
         comment: str | None,
         photo_path: str | None,
         linked_inspection_id: int | None,
+        trip_count: int | None,
     ) -> int:
         with self._connect() as conn:
             cur = conn.execute(
@@ -882,10 +886,11 @@ class Database:
                     comment,
                     photo_path,
                     linked_inspection_id,
+                    trip_count,
                     created_at,
                     delivery_status
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
                 """,
                 (
                     driver_telegram_id,
@@ -898,10 +903,30 @@ class Database:
                     comment,
                     photo_path,
                     linked_inspection_id,
+                    trip_count,
                     self._now(),
                 ),
             )
             return int(cur.lastrowid)
+
+    def get_latest_submitted_equipment_type_for_driver(
+        self,
+        driver_telegram_id: int,
+    ) -> str | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT e.type
+                FROM inspections i
+                JOIN equipment e ON e.id = i.equipment_id
+                WHERE i.driver_telegram_id = ?
+                  AND i.status IN ('submitted', 'closed')
+                ORDER BY i.id DESC
+                LIMIT 1
+                """,
+                (driver_telegram_id,),
+            ).fetchone()
+        return str(row["type"]).strip() if row and row["type"] is not None else None
 
     def add_daily_action_report_photo(
         self,
