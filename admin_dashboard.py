@@ -869,7 +869,7 @@ with quick_nav_col:
     _render_quick_navigation_menu()
 
 dashboard_stats = db.get_inspection_dashboard_stats(today_date=now_moscow().date().isoformat())
-rows = db.get_recent_inspections(limit=300)
+rows = db.get_recent_inspections(limit=None)
 _render_section_anchor("section-analytics")
 st.subheader("Аналитика")
 stats_col_total, stats_col_today, stats_col_issues, stats_col_approved = st.columns(4)
@@ -1009,32 +1009,17 @@ else:
     if st.session_state["inspection_filter_equipment_number"] not in equipment_number_options:
         st.session_state["inspection_filter_equipment_number"] = "Все"
 
-    st.session_state["inspection_filter_date_from"] = _clamp_date_filter(
-        st.session_state["inspection_filter_date_from"],
-        min_date,
-        max_date,
-    )
-    st.session_state["inspection_filter_date_to"] = _clamp_date_filter(
-        st.session_state["inspection_filter_date_to"],
-        min_date,
-        max_date,
-    )
-
     st.markdown("#### Фильтры")
     date_from_col, date_to_col, driver_col = st.columns(3)
     with date_from_col:
         st.date_input(
             "Дата (от)",
-            min_value=min_date,
-            max_value=max_date,
             value=st.session_state["inspection_filter_date_from"],
             key="inspection_filter_date_from",
         )
     with date_to_col:
         st.date_input(
             "Дата (до)",
-            min_value=min_date,
-            max_value=max_date,
             value=st.session_state["inspection_filter_date_to"],
             key="inspection_filter_date_to",
         )
@@ -1160,7 +1145,7 @@ if target_inspection_id is not None:
 st.divider()
 _render_section_anchor("section-daily-actions")
 st.subheader("Журнал действий в течении смены")
-daily_rows = db.get_recent_daily_action_reports(limit=300)
+daily_rows = db.get_recent_daily_action_reports(limit=None)
 if not daily_rows:
     st.info("Пока нет отчетов по действиям в течении дня")
 else:
@@ -1199,17 +1184,6 @@ else:
     if "daily_action_filter_type" not in st.session_state:
         st.session_state["daily_action_filter_type"] = "all"
 
-    st.session_state["daily_action_filter_date_from"] = _clamp_date_filter(
-        st.session_state["daily_action_filter_date_from"],
-        min_daily_date,
-        max_daily_date,
-    )
-    st.session_state["daily_action_filter_date_to"] = _clamp_date_filter(
-        st.session_state["daily_action_filter_date_to"],
-        min_daily_date,
-        max_daily_date,
-    )
-
     daily_driver_options = ["Все"] + sorted(
         [value for value in daily_df["_driver"].dropna().unique().tolist() if value and value != "—"]
     )
@@ -1225,16 +1199,12 @@ else:
     with daily_date_from_col:
         st.date_input(
             "Дата (от)",
-            min_value=min_daily_date,
-            max_value=max_daily_date,
             value=st.session_state["daily_action_filter_date_from"],
             key="daily_action_filter_date_from",
         )
     with daily_date_to_col:
         st.date_input(
             "Дата (до)",
-            min_value=min_daily_date,
-            max_value=max_daily_date,
             value=st.session_state["daily_action_filter_date_to"],
             key="daily_action_filter_date_to",
         )
@@ -1451,7 +1421,7 @@ else:
 
     st.markdown("#### Все водители")
     drivers_df = pd.DataFrame(drivers_table)
-    styled_drivers_df = drivers_df.style.applymap(
+    styled_drivers_df = drivers_df.style.map(
         _driver_rating_cell_style,
         subset=["Рейтинг"],
     )

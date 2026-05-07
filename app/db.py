@@ -772,30 +772,31 @@ class Database:
                 (inspection_id,),
             ).fetchone()
 
-    def get_recent_inspections(self, limit: int = 100) -> list[sqlite3.Row]:
-        with self._connect() as conn:
-            return conn.execute(
-                """
+    def get_recent_inspections(self, limit: int | None = 100) -> list[sqlite3.Row]:
+        query = """
+            SELECT
+                i.*,
+                e.type,
+                e.brand,
+                e.reg_number,
+                COALESCE(items.nok_count, 0) AS nok_count
+            FROM inspections i
+            JOIN equipment e ON e.id = i.equipment_id
+            LEFT JOIN (
                 SELECT
-                    i.*,
-                    e.type,
-                    e.brand,
-                    e.reg_number,
-                    COALESCE(items.nok_count, 0) AS nok_count
-                FROM inspections i
-                JOIN equipment e ON e.id = i.equipment_id
-                LEFT JOIN (
-                    SELECT
-                        inspection_id,
-                        SUM(CASE WHEN is_ok = 0 THEN 1 ELSE 0 END) AS nok_count
-                    FROM inspection_items
-                    GROUP BY inspection_id
-                ) items ON items.inspection_id = i.id
-                ORDER BY i.id DESC
-                LIMIT ?
-                """,
-                (limit,),
-            ).fetchall()
+                    inspection_id,
+                    SUM(CASE WHEN is_ok = 0 THEN 1 ELSE 0 END) AS nok_count
+                FROM inspection_items
+                GROUP BY inspection_id
+            ) items ON items.inspection_id = i.id
+            ORDER BY i.id DESC
+        """
+        params: tuple[object, ...] = ()
+        if limit is not None:
+            query += "\nLIMIT ?"
+            params = (limit,)
+        with self._connect() as conn:
+            return conn.execute(query, params).fetchall()
 
     def get_inspection_dashboard_stats(self, *, today_date: str) -> dict[str, int]:
         with self._connect() as conn:
@@ -969,17 +970,18 @@ class Database:
                 (status, self._now(), mechanic_message_id, report_id),
             )
 
-    def get_recent_daily_action_reports(self, limit: int = 100) -> list[sqlite3.Row]:
+    def get_recent_daily_action_reports(self, limit: int | None = 100) -> list[sqlite3.Row]:
+        query = """
+            SELECT *
+            FROM daily_action_reports
+            ORDER BY id DESC
+        """
+        params: tuple[object, ...] = ()
+        if limit is not None:
+            query += "\nLIMIT ?"
+            params = (limit,)
         with self._connect() as conn:
-            return conn.execute(
-                """
-                SELECT *
-                FROM daily_action_reports
-                ORDER BY id DESC
-                LIMIT ?
-                """,
-                (limit,),
-            ).fetchall()
+            return conn.execute(query, params).fetchall()
 
     def get_daily_action_report(self, report_id: int) -> sqlite3.Row | None:
         with self._connect() as conn:
