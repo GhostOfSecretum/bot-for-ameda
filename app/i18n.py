@@ -1121,6 +1121,21 @@ TEXTS = {
         "tg": "Қарор сабт шуд",
         "uz": "Qaror saqlandi",
     },
+    "decision_approved_label": {
+        "ru": "Одобрено",
+        "tg": "Тасдиқ шуд",
+        "uz": "Tasdiqlandi",
+    },
+    "decision_rejected_label": {
+        "ru": "Отклонено",
+        "tg": "Рад шуд",
+        "uz": "Rad etildi",
+    },
+    "decision_repair_label": {
+        "ru": "Отправлено в ремонт",
+        "tg": "Ба таъмир фиристода шуд",
+        "uz": "Ta'mirga yuborildi",
+    },
     "decision_by_mechanic": {
         "ru": "Решение по отчету #{inspection_id}: <b>{decision}</b> (механик: {mechanic_name})",
         "tg": "Қарор барои ҳисоботи #{inspection_id}: <b>{decision}</b> (механик: {mechanic_name})",

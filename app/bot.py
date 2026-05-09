@@ -1613,6 +1613,8 @@ class InspectionBot:
             details=f"decision={decision}",
         )
 
+        decision_label_key = f"decision_{decision}_label"
+        decision_label_for_mechanic = t(lang, decision_label_key)
         await callback.answer(t(lang, "decision_saved"))
         await callback.message.edit_reply_markup(reply_markup=None)
         await callback.message.answer(
@@ -1620,7 +1622,7 @@ class InspectionBot:
                 lang,
                 "decision_by_mechanic",
                 inspection_id=inspection_id,
-                decision=decision,
+                decision=decision_label_for_mechanic,
                 mechanic_name=callback.from_user.full_name,
             )
         )
